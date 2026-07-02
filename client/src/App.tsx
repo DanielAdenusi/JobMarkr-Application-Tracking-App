@@ -7,7 +7,7 @@ import { DashboardPage } from "./pages/Dashboard";
 import { ApplicationsPage } from "./pages/Applications";
 import { NewApplicationPage } from "./pages/NewApplication";
 import { ApplicationDetailsPage } from "./pages/ApplicationDetails";
-import { SettingsPage } from "./pages/Settings";
+import { AccountSettingsPage } from "./pages/AccountSettings";
 import { NotFoundPage } from "./pages/NotFound";
 import { HomePage } from "./pages/Home";
 import { LoginPage } from "./pages/Auth/Login";
@@ -66,7 +66,10 @@ function App() {
 						element={<EditApplicationPage />}
 					/>
 					<Route path="/kanban" element={<KanbanPage />} />
-					<Route path="/settings" element={<SettingsPage />} />
+					<Route
+						path="/account/settings"
+						element={<AccountSettingsPage />}
+					/>
 				</Route>
 			</Route>
 

@@ -130,7 +130,7 @@ export default function AddApplicationForm({
 					<input
 						value={salary}
 						onChange={(event) => setSalary(event.target.value)}
-						placeholder="£35,000"
+						placeholder="GBP 35,000"
 					/>
 				</label>
 

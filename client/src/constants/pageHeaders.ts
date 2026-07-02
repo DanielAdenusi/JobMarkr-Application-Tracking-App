@@ -1,6 +1,6 @@
 export const PAGE_HEADERS = [
 	{
-		label: "Dashboard",
+		label: "Your Dashboard",
 		path: "/dashboard",
 	},
 	{
@@ -8,23 +8,17 @@ export const PAGE_HEADERS = [
 		path: "/applications/new",
 	},
 	{
-		label: "Applications",
+		label: "View Applications",
 		path: "/applications",
 	},
 	{
-		label: "Kanban",
+		label: "Your Kanban",
 		path: "/kanban",
 	},
 	{
-		label: "Settings",
-		path: "/settings",
-	},
-	{
-		label: "Profile",
-		path: "/profile",
-	},
-	{
-		label: "Help",
-		path: "/help",
+		label: "Account Settings",
+		path: "/account/settings",
 	},
 ] as const;
+
+export type PageHeader = (typeof PAGE_HEADERS)[number];

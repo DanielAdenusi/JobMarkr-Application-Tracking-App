@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
+import {
+	Building2,
+	CalendarDays,
+	GripVertical,
+	Plus,
+	Search,
+} from "lucide-react";
 
 import {
 	getApplications,
@@ -10,19 +17,14 @@ import {
 	APPLICATION_STATUSES,
 	type ApplicationStatus,
 } from "../constants/applicationOptions";
+import {
+	applicationStatusColumnClasses,
+	applicationStatusLabels,
+} from "../constants/applicationStatusStyles";
+import { applicationPriorityBadgeClasses } from "../constants/applicationPriorityStyles";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 import type { Application } from "../types/application";
-
-const statusLabels: Record<ApplicationStatus, string> = {
-	wishlist: "Wishlist",
-	saved: "Saved",
-	applied: "Applied",
-	assessment: "Assessment",
-	interviewing: "Interviewing",
-	offer: "Offer",
-	rejected: "Rejected",
-	withdrawn: "Withdrawn",
-};
 
 const statusDescriptions: Record<ApplicationStatus, string> = {
 	wishlist: "Roles you are interested in.",
@@ -35,71 +37,101 @@ const statusDescriptions: Record<ApplicationStatus, string> = {
 	withdrawn: "Roles you stopped pursuing.",
 };
 
-const statusColumnClasses: Record<ApplicationStatus, string> = {
-	wishlist: "border-slate-200 bg-slate-50",
-	saved: "border-blue-200 bg-blue-50",
-	applied: "border-indigo-200 bg-indigo-50",
-	assessment: "border-purple-200 bg-purple-50",
-	interviewing: "border-amber-200 bg-amber-50",
-	offer: "border-emerald-200 bg-emerald-50",
-	rejected: "border-red-200 bg-red-50",
-	withdrawn: "border-zinc-200 bg-zinc-50",
-};
+type BoardSort = "updated_desc" | "updated_asc" | "role_az";
 
-const statusBadgeClasses: Record<ApplicationStatus, string> = {
-	wishlist: "bg-slate-100 text-slate-700",
-	saved: "bg-blue-100 text-blue-700",
-	applied: "bg-indigo-100 text-indigo-700",
-	assessment: "bg-purple-100 text-purple-700",
-	interviewing: "bg-amber-100 text-amber-700",
-	offer: "bg-emerald-100 text-emerald-700",
-	rejected: "bg-red-100 text-red-700",
-	withdrawn: "bg-zinc-100 text-zinc-700",
-};
+function formatOption(value: string) {
+	return value
+		.split("_")
+		.map((word) => word[0].toUpperCase() + word.slice(1))
+		.join(" ");
+}
 
-function formatDate(value: string | null) {
-	if (!value) return "No follow-up";
+function formatCompactDate(value: string | null) {
+	if (!value) return null;
+
+	const date = new Date(value);
+
+	if (Number.isNaN(date.getTime())) return null;
 
 	return new Intl.DateTimeFormat("en-GB", {
-		day: "numeric",
+		day: "2-digit",
 		month: "short",
-	}).format(new Date(value));
+	}).format(date);
 }
 
-function getPreviousStatus(status: ApplicationStatus) {
-	const index = APPLICATION_STATUSES.indexOf(status);
-
-	if (index <= 0) {
-		return null;
-	}
-
-	return APPLICATION_STATUSES[index - 1];
-}
-
-function getNextStatus(status: ApplicationStatus) {
-	const index = APPLICATION_STATUSES.indexOf(status);
-
-	if (index === -1 || index >= APPLICATION_STATUSES.length - 1) {
-		return null;
-	}
-
-	return APPLICATION_STATUSES[index + 1];
+function getCardDate(application: Application) {
+	return formatCompactDate(application.followUpAt || application.deadlineAt);
 }
 
 export function KanbanPage() {
 	const [applications, setApplications] = useState<Application[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [updatingId, setUpdatingId] = useState<string | null>(null);
+	const [draggingId, setDraggingId] = useState<string | null>(null);
+	const [dragOverStatus, setDragOverStatus] =
+		useState<ApplicationStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [boardSearch, setBoardSearch] = useState("");
+	const [companyFilter, setCompanyFilter] = useState("all");
+	const [boardSort, setBoardSort] = useState<BoardSort>("updated_desc");
+	const debouncedBoardSearch = useDebouncedValue(boardSearch, 250);
+
+	const companyOptions = useMemo(() => {
+		return Array.from(
+			new Set(
+				applications
+					.map((application) => application.company)
+					.filter(Boolean),
+			),
+		).sort((a, b) => a.localeCompare(b));
+	}, [applications]);
+
+	const boardApplications = useMemo(() => {
+		const query = debouncedBoardSearch.trim().toLowerCase();
+
+		const filtered = applications.filter((application) => {
+			const matchesSearch =
+				!query ||
+				[application.role, application.company, application.location]
+					.filter(Boolean)
+					.join(" ")
+					.toLowerCase()
+					.includes(query);
+
+			const matchesCompany =
+				companyFilter === "all" ||
+				application.company === companyFilter;
+
+			return matchesSearch && matchesCompany;
+		});
+
+		return [...filtered].sort((a, b) => {
+			switch (boardSort) {
+				case "updated_asc":
+					return (
+						new Date(a.updatedAt).getTime() -
+						new Date(b.updatedAt).getTime()
+					);
+				case "role_az":
+					return a.role.localeCompare(b.role);
+				case "updated_desc":
+				default:
+					return (
+						new Date(b.updatedAt).getTime() -
+						new Date(a.updatedAt).getTime()
+					);
+			}
+		});
+	}, [applications, debouncedBoardSearch, boardSort, companyFilter]);
 
 	const columns = useMemo(() => {
 		return APPLICATION_STATUSES.map((status) => ({
 			status,
-			applications: applications.filter(
+			applications: boardApplications.filter(
 				(application) => application.status === status,
 			),
 		}));
-	}, [applications]);
+	}, [boardApplications]);
 
 	useEffect(() => {
 		async function loadApplications() {
@@ -125,6 +157,12 @@ export function KanbanPage() {
 		applicationId: string,
 		nextStatus: ApplicationStatus,
 	) {
+		const application = applications.find(
+			(item) => item.id === applicationId,
+		);
+
+		if (!application || application.status === nextStatus) return;
+
 		const previousApplications = applications;
 
 		try {
@@ -132,13 +170,13 @@ export function KanbanPage() {
 			setUpdatingId(applicationId);
 
 			setApplications((current) =>
-				current.map((application) =>
-					application.id === applicationId
+				current.map((item) =>
+					item.id === applicationId
 						? {
-								...application,
+								...item,
 								status: nextStatus,
 							}
-						: application,
+						: item,
 				),
 			);
 
@@ -148,12 +186,11 @@ export function KanbanPage() {
 			);
 
 			setApplications((current) =>
-				current.map((application) =>
-					application.id === applicationId
-						? updatedApplication
-						: application,
+				current.map((item) =>
+					item.id === applicationId ? updatedApplication : item,
 				),
 			);
+			window.dispatchEvent(new Event("applications:changed"));
 		} catch (err) {
 			setApplications(previousApplications);
 			setError(
@@ -166,9 +203,46 @@ export function KanbanPage() {
 		}
 	}
 
+	function handleDragStart(applicationId: string) {
+		return (event: React.DragEvent<HTMLElement>) => {
+			setDraggingId(applicationId);
+			event.dataTransfer.effectAllowed = "move";
+			event.dataTransfer.setData("text/plain", applicationId);
+		};
+	}
+
+	function handleColumnDragOver(status: ApplicationStatus) {
+		return (event: React.DragEvent<HTMLElement>) => {
+			event.preventDefault();
+			event.dataTransfer.dropEffect = "move";
+			setDragOverStatus(status);
+		};
+	}
+
+	function handleColumnDrop(status: ApplicationStatus) {
+		return (event: React.DragEvent<HTMLElement>) => {
+			event.preventDefault();
+
+			const applicationId =
+				event.dataTransfer.getData("text/plain") || draggingId;
+
+			setDraggingId(null);
+			setDragOverStatus(null);
+
+			if (applicationId) {
+				moveApplication(applicationId, status);
+			}
+		};
+	}
+
+	function endDrag() {
+		setDraggingId(null);
+		setDragOverStatus(null);
+	}
+
 	if (isLoading) {
 		return (
-			<section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+			<section className="rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm shadow-slate-200/40">
 				<div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
 				<p className="mt-4 font-bold text-slate-700">
 					Loading Kanban board...
@@ -178,34 +252,15 @@ export function KanbanPage() {
 	}
 
 	return (
-		<section className="grid gap-6">
-			<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-				<div>
-					<h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
-						Kanban board
-					</h2>
-					<p className="mt-2 max-w-2xl leading-7 text-slate-600">
-						Move applications through your job search pipeline and
-						keep track of what stage each role is currently in.
-					</p>
-				</div>
-
-				<Link
-					to="/applications/new"
-					className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
-				>
-					Add application
-				</Link>
-			</div>
-
+		<section className="flex h-full min-h-0 flex-col gap-6">
 			{error && (
-				<div className="rounded-3xl border border-red-200 bg-red-50 p-5">
+				<div className="rounded-xl border border-red-200 bg-red-50 p-5">
 					<p className="font-bold text-red-900">{error}</p>
 				</div>
 			)}
 
 			{applications.length === 0 ? (
-				<div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
+				<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
 					<h3 className="text-lg font-extrabold">
 						No applications yet
 					</h3>
@@ -216,27 +271,121 @@ export function KanbanPage() {
 
 					<Link
 						to="/applications/new"
-						className="mt-5 inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
+						className="mt-5 inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700"
 					>
 						Add application
 					</Link>
 				</div>
 			) : (
-				<div className="overflow-x-auto pb-4">
-					<div className="grid min-w-350 snap-x snap-mandatory grid-cols-8 gap-4">
-						{columns.map((column) => (
-							<section
-								key={column.status}
-								className={[
-									"flex max-h-[calc(100vh-220px)] min-h-130 snap-start flex-col rounded-3xl border p-4",
-									statusColumnClasses[column.status],
-								].join(" ")}
+				<>
+					<div className="shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/40">
+						<div className="grid gap-4 xl:grid-cols-[minmax(240px,1fr)_220px_200px_auto] xl:items-center">
+							<label className="relative">
+								<Search
+									size={17}
+									strokeWidth={2.25}
+									className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+								/>
+								<input
+									type="search"
+									value={boardSearch}
+									onChange={(event) =>
+										setBoardSearch(event.target.value)
+									}
+									placeholder="Search applications..."
+									className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 pl-10 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+								/>
+							</label>
+
+							<label>
+								<span className="sr-only">
+									Filter by company
+								</span>
+								<select
+									value={companyFilter}
+									onChange={(event) =>
+										setCompanyFilter(event.target.value)
+									}
+									className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+								>
+									<option value="all">
+										Filter by company
+									</option>
+									{companyOptions.map((company) => (
+										<option key={company} value={company}>
+											{company}
+										</option>
+									))}
+								</select>
+							</label>
+
+							<label>
+								<span className="sr-only">
+									Sort applications
+								</span>
+								<select
+									value={boardSort}
+									onChange={(event) =>
+										setBoardSort(
+											event.target.value as BoardSort,
+										)
+									}
+									className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+								>
+									<option value="updated_desc">
+										Sort by updated date
+									</option>
+									<option value="updated_asc">
+										Oldest updated
+									</option>
+									<option value="role_az">Role A-Z</option>
+								</select>
+							</label>
+
+							<Link
+								to="/applications/new"
+								className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700"
 							>
-								<div className="mb-4">
-									<div className="flex items-start justify-between gap-3">
+								<Plus size={17} strokeWidth={2.5} />
+								Add Application
+							</Link>
+						</div>
+					</div>
+
+					<div className="-mx-2 min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-2 pb-3">
+						<div className="grid h-full min-h-0 w-max auto-cols-73.5 grid-flow-col grid-rows-1 gap-4">
+							{columns.map((column) => (
+								<section
+									key={column.status}
+									onDragOver={handleColumnDragOver(
+										column.status,
+									)}
+									onDragLeave={() =>
+										setDragOverStatus((current) =>
+											current === column.status
+												? null
+												: current,
+										)
+									}
+									onDrop={handleColumnDrop(column.status)}
+									className={[
+										"flex h-full min-h-0 w-73.5 shrink-0 flex-col rounded-xl border p-4 transition",
+										applicationStatusColumnClasses[
+											column.status
+										],
+										dragOverStatus === column.status
+											? "ring-4 ring-blue-200"
+											: "",
+									].join(" ")}
+								>
+									<div className="mb-4 flex items-start justify-between gap-3">
 										<div>
 											<h3 className="font-extrabold text-slate-950">
-												{statusLabels[column.status]}
+												{
+													applicationStatusLabels[
+														column.status
+													]
+												}
 											</h3>
 											<p className="mt-1 text-xs font-semibold leading-5 text-slate-600">
 												{
@@ -251,189 +400,130 @@ export function KanbanPage() {
 											{column.applications.length}
 										</span>
 									</div>
-								</div>
 
-								<div className="grid gap-3 overflow-y-auto pr-1">
-									{column.applications.length === 0 ? (
-										<div className="rounded-2xl border border-dashed border-white/80 bg-white/60 p-4 text-center">
-											<p className="text-sm font-bold text-slate-500">
-												No roles here
-											</p>
-										</div>
-									) : (
-										column.applications.map(
-											(application) => {
-												const previousStatus =
-													getPreviousStatus(
-														application.status,
-													);
-												const nextStatus =
-													getNextStatus(
-														application.status,
-													);
-												const isUpdating =
-													updatingId ===
-													application.id;
+									<div className="grid min-h-0 content-start gap-3 overflow-y-auto pr-1">
+										{column.applications.length === 0 ? (
+											<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-xs text-slate-400">
+												<p className="font-bold">
+													Drop roles here
+												</p>
+											</div>
+										) : (
+											column.applications.map(
+												(application) => {
+													const isUpdating =
+														updatingId ===
+														application.id;
+													const isDragging =
+														draggingId ===
+														application.id;
+													const cardDate =
+														getCardDate(
+															application,
+														);
 
-												return (
-													<article
-														key={application.id}
-														className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
-													>
-														<div className="flex items-start justify-between gap-3">
-															<div className="min-w-0">
-																<p className="truncate text-sm font-extrabold text-slate-950">
-																	{
-																		application.role
+													return (
+														<Link
+															key={application.id}
+															to={`/applications/${application.id}`}
+															draggable={
+																!isUpdating
+															}
+															onDragStart={handleDragStart(
+																application.id,
+															)}
+															onDragEnd={endDrag}
+															className={[
+																"block rounded-xl border border-neutral-200 bg-white p-4 text-left shadow-sm shadow-blue-100/50 transition group",
+																isUpdating
+																	? "cursor-wait opacity-70"
+																	: "cursor-grab active:cursor-grabbing",
+																isDragging
+																	? "scale-[0.98] opacity-50 ring-4 ring-blue-100"
+																	: "hover:shadow-md hover:ring-1 hover:ring-blue-100 hover:border-blue-200",
+															].join(" ")}
+														>
+															<div className="flex items-center justify-between gap-3">
+																<span
+																	className={[
+																		"inline-flex h-6 items-center rounded-lg px-3 text-xs font-semibold ring-1",
+																		applicationPriorityBadgeClasses[
+																			application
+																				.priority
+																		],
+																	].join(" ")}
+																>
+																	{formatOption(
+																		application.priority,
+																	)}
+																</span>
+
+																<GripVertical
+																	size={17}
+																	strokeWidth={
+																		2.5
 																	}
-																</p>
-																<p className="mt-1 truncate text-xs font-semibold text-slate-500">
-																	{
-																		application.company
-																	}
-																</p>
+																	className="text-slate-300 hidden group-hover:inline-block"
+																/>
 															</div>
 
-															<span
-																className={[
-																	"shrink-0 rounded-full px-2.5 py-1 text-[0.7rem] font-extrabold",
-																	statusBadgeClasses[
-																		application
-																			.status
-																	],
-																].join(" ")}
-															>
+															<p className="mt-4 truncate text-sm font-bold text-slate-950 capitalize">
 																{
-																	statusLabels[
-																		application
-																			.status
-																	]
+																	application.role
 																}
-															</span>
-														</div>
-
-														{application.location && (
-															<p className="mt-3 text-xs font-semibold text-slate-500">
+															</p>
+															<p className="mt-2 flex items-center gap-2 truncate text-xs font-semibold text-slate-500">
+																<Building2
+																	size={14}
+																	strokeWidth={
+																		2
+																	}
+																	className="text-slate-400"
+																/>
 																{
-																	application.location
+																	application.company
 																}
 															</p>
-														)}
 
-														<div className="mt-4 rounded-2xl bg-slate-50 p-3">
-															<p className="text-xs font-bold text-slate-500">
-																Follow-up
-															</p>
-															<p className="mt-1 text-sm font-extrabold text-slate-800">
-																{formatDate(
-																	application.followUpAt,
-																)}
-															</p>
-														</div>
+															<div
+																aria-hidden="true"
+																className="my-4 h-px bg-slate-100"
+															/>
 
-														<div className="mt-4 grid gap-2">
-															<select
-																value={
-																	application.status
-																}
-																disabled={
-																	isUpdating
-																}
-																onChange={(
-																	event,
-																) =>
-																	moveApplication(
-																		application.id,
-																		event
-																			.target
-																			.value as ApplicationStatus,
-																	)
-																}
-																className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-bold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-															>
-																{APPLICATION_STATUSES.map(
-																	(
-																		status,
-																	) => (
-																		<option
-																			key={
-																				status
-																			}
-																			value={
-																				status
-																			}
-																		>
-																			{
-																				statusLabels[
-																					status
-																				]
-																			}
-																		</option>
-																	),
-																)}
-															</select>
+															<div className="flex items-center justify-between gap-3">
+																<p className="min-w-0 truncate text-sm font-semibold text-slate-500">
+																	{application.location ||
+																		"No location set"}
+																</p>
 
-															<div className="grid grid-cols-2 gap-2">
-																<button
-																	type="button"
-																	disabled={
-																		!previousStatus ||
-																		isUpdating
-																	}
-																	onClick={() => {
-																		if (
-																			previousStatus
-																		) {
-																			moveApplication(
-																				application.id,
-																				previousStatus,
-																			);
+																{cardDate && (
+																	<span className="inline-flex shrink-0 items-center gap-1.5 text-sm font-semibold text-slate-500">
+																		<CalendarDays
+																			size={
+																				14
+																			}
+																			strokeWidth={
+																				2.4
+																			}
+																			className="text-slate-400"
+																		/>
+																		{
+																			cardDate
 																		}
-																	}}
-																	className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-																>
-																	← Back
-																</button>
-
-																<button
-																	type="button"
-																	disabled={
-																		!nextStatus ||
-																		isUpdating
-																	}
-																	onClick={() => {
-																		if (
-																			nextStatus
-																		) {
-																			moveApplication(
-																				application.id,
-																				nextStatus,
-																			);
-																		}
-																	}}
-																	className="h-10 rounded-2xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
-																>
-																	Next →
-																</button>
+																	</span>
+																)}
 															</div>
-
-															<Link
-																to={`/applications/${application.id}`}
-																className="inline-flex h-10 items-center justify-center rounded-2xl bg-slate-900 px-3 text-xs font-bold text-white transition hover:bg-slate-700"
-															>
-																View details
-															</Link>
-														</div>
-													</article>
-												);
-											},
-										)
-									)}
-								</div>
-							</section>
-						))}
+														</Link>
+													);
+												},
+											)
+										)}
+									</div>
+								</section>
+							))}
+						</div>
 					</div>
-				</div>
+				</>
 			)}
 		</section>
 	);

@@ -1,4 +1,5 @@
 import { pool } from "../db/pool.js";
+import { APPLICATION_STATUSES } from "../constants/applicationOptions.js";
 
 function emptyToNull(value) {
 	return value === "" ? null : value;
@@ -10,6 +11,70 @@ function getNextOptionalValue(dataValue, existingValue) {
 	}
 
 	return emptyToNull(dataValue);
+}
+
+function formatTransitionTimestamp(value) {
+	if (!value) {
+		return new Date().toISOString();
+	}
+
+	if (value instanceof Date) {
+		return value.toISOString();
+	}
+
+	return value;
+}
+
+function normalizeStatusTransitions(value, fallbackStatus, fallbackDate) {
+	const transitions = Array.isArray(value) ? value : [];
+
+	const normalizedTransitions = transitions
+		.filter(
+			(transition) =>
+				transition &&
+				APPLICATION_STATUSES.includes(transition.status) &&
+				transition.transitionedAt,
+		)
+		.map((transition) => ({
+			status: transition.status,
+			transitionedAt: formatTransitionTimestamp(
+				transition.transitionedAt,
+			),
+		}));
+
+	if (normalizedTransitions.length > 0) {
+		return normalizedTransitions;
+	}
+
+	return [
+		{
+			status: fallbackStatus,
+			transitionedAt: formatTransitionTimestamp(fallbackDate),
+		},
+	];
+}
+
+function getNextStatusTransitions(existing, nextStatus) {
+	const existingTransitions = normalizeStatusTransitions(
+		existing.statusTransitions,
+		existing.status,
+		existing.createdAt,
+	);
+
+	if (nextStatus === existing.status) {
+		return existingTransitions;
+	}
+
+	const transition = {
+		status: nextStatus,
+		transitionedAt: new Date().toISOString(),
+	};
+
+	if (nextStatus === "wishlist") {
+		return [transition];
+	}
+
+	return [...existingTransitions, transition];
 }
 
 function mapApplicationRow(row) {
@@ -35,6 +100,11 @@ function mapApplicationRow(row) {
 		interviewAt: row.interview_at,
 		rejectedAt: row.rejected_at,
 		offerDeadlineAt: row.offer_deadline_at,
+		statusTransitions: normalizeStatusTransitions(
+			row.status_transitions,
+			row.status,
+			row.created_at,
+		),
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
@@ -110,13 +180,20 @@ export async function createApplication(userId, data) {
       deadline_at,
       interview_at,
       rejected_at,
-      offer_deadline_at
+      offer_deadline_at,
+      status_transitions
     )
     VALUES (
       $1, $2, $3, $4, $5,
       $6, COALESCE($7, 'saved'), COALESCE($8, 'medium'), $9, $10,
       $11, $12, $13, $14, $15,
-      $16, $17, $18, $19, $20
+      $16, $17, $18, $19, $20,
+      jsonb_build_array(
+        jsonb_build_object(
+          'status', COALESCE($7, 'saved'),
+          'transitionedAt', NOW()
+        )
+      )
     )
     RETURNING *
     `,
@@ -154,6 +231,12 @@ export async function updateApplication(userId, applicationId, data) {
 		return null;
 	}
 
+	const nextStatus = data.status ?? existing.status;
+	const nextStatusTransitions = getNextStatusTransitions(
+		existing,
+		nextStatus,
+	);
+
 	const result = await pool.query(
 		`
     UPDATE applications
@@ -176,7 +259,8 @@ export async function updateApplication(userId, applicationId, data) {
       deadline_at = $18,
       interview_at = $19,
       rejected_at = $20,
-      offer_deadline_at = $21
+      offer_deadline_at = $21,
+      status_transitions = $22::jsonb
     WHERE user_id = $1
     AND id = $2
     RETURNING *
@@ -206,6 +290,7 @@ export async function updateApplication(userId, applicationId, data) {
 				data.offerDeadlineAt,
 				existing.offerDeadlineAt,
 			),
+			JSON.stringify(nextStatusTransitions),
 		],
 	);
 
@@ -213,15 +298,28 @@ export async function updateApplication(userId, applicationId, data) {
 }
 
 export async function updateApplicationStatus(userId, applicationId, status) {
+	const existing = await getApplicationById(userId, applicationId);
+
+	if (!existing) {
+		return null;
+	}
+
+	if (existing.status === status) {
+		return existing;
+	}
+
+	const nextStatusTransitions = getNextStatusTransitions(existing, status);
+
 	const result = await pool.query(
 		`
     UPDATE applications
-    SET status = $3
+    SET status = $3,
+        status_transitions = $4::jsonb
     WHERE user_id = $1
     AND id = $2
     RETURNING *
     `,
-		[userId, applicationId, status],
+		[userId, applicationId, status, JSON.stringify(nextStatusTransitions)],
 	);
 
 	if (result.rows.length === 0) {

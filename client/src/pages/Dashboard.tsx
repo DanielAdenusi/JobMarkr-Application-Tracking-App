@@ -1,7 +1,22 @@
 import { useEffect, useState } from "react";
+import {
+	ArrowRight,
+	BriefcaseBusiness,
+	CalendarClock,
+	Plus,
+	TrendingUp,
+	Trophy,
+} from "lucide-react";
 import { Link } from "react-router";
+import {
+	applicationStatusBadgeClasses,
+	applicationStatusLabels,
+} from "../constants/applicationStatusStyles";
 import { getDashboardStats } from "../services/dashboardApi";
-import type { DashboardStats } from "../types/dashboard";
+import type {
+	DashboardApplicationSummary,
+	DashboardStats,
+} from "../types/dashboard";
 
 function formatDate(value: string | null) {
 	if (!value) return "No date set";
@@ -11,6 +26,43 @@ function formatDate(value: string | null) {
 		month: "short",
 		year: "numeric",
 	}).format(new Date(value));
+}
+
+function getApplicationProgress(application: DashboardApplicationSummary) {
+	switch (application.status) {
+		case "wishlist":
+		case "saved":
+			return {
+				stage: "Stage 1 of 5",
+				percent: 10,
+			};
+		case "applied":
+			return {
+				stage: "Stage 2 of 5",
+				percent: 25,
+			};
+		case "assessment":
+			return {
+				stage: "Stage 3 of 5",
+				percent: 50,
+			};
+		case "interviewing":
+			return {
+				stage: "Stage 4 of 5",
+				percent: 75,
+			};
+		case "offer":
+			return {
+				stage: "Completed",
+				percent: 100,
+			};
+		case "rejected":
+		case "withdrawn":
+			return {
+				stage: "Closed",
+				percent: 100,
+			};
+	}
 }
 
 export function DashboardPage() {
@@ -40,7 +92,7 @@ export function DashboardPage() {
 
 	if (isLoading) {
 		return (
-			<section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+			<section className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
 				<div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
 				<p className="mt-4 font-bold text-slate-700">
 					Loading dashboard...
@@ -51,7 +103,7 @@ export function DashboardPage() {
 
 	if (error || !dashboard) {
 		return (
-			<section className="rounded-3xl border border-red-200 bg-red-50 p-8 text-center">
+			<section className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
 				<h2 className="text-lg font-extrabold text-red-900">
 					Dashboard failed to load
 				</h2>
@@ -60,105 +112,104 @@ export function DashboardPage() {
 		);
 	}
 
+	const activeApplications =
+		dashboard.totalApplications -
+		dashboard.rejectedCount -
+		dashboard.offerCount;
+	const responseRate =
+		dashboard.totalApplications > 0
+			? Math.round(
+					((dashboard.interviewCount + dashboard.offerCount) /
+						dashboard.totalApplications) *
+						100,
+				)
+			: 0;
 	const statCards = [
 		{
 			label: "Total applications",
 			value: dashboard.totalApplications,
+			helper: "Across all stages",
+			icon: BriefcaseBusiness,
+			color: "bg-emerald-100 text-emerald-700",
 		},
 		{
-			label: "Applied",
-			value: dashboard.appliedCount,
+			label: "Active roles",
+			value: Math.max(activeApplications, 0),
+			helper: "Still in progress",
+			icon: TrendingUp,
+			color: "bg-blue-100 text-blue-700",
 		},
 		{
 			label: "Interviews",
 			value: dashboard.interviewCount,
+			helper:
+				dashboard.interviewCount > 0
+					? "Interview stage"
+					: "No interviews yet",
+			icon: CalendarClock,
+			color: "bg-amber-100 text-amber-700",
 		},
 		{
 			label: "Offers",
 			value: dashboard.offerCount,
-		},
-		{
-			label: "Rejected",
-			value: dashboard.rejectedCount,
-		},
-		{
-			label: "Upcoming follow-ups",
-			value: dashboard.upcomingFollowUpCount,
-		},
-		{
-			label: "Overdue follow-ups",
-			value: dashboard.overdueFollowUpCount,
+			helper:
+				dashboard.offerCount > 0 ? "Great progress" : "No offers yet",
+			icon: Trophy,
+			color: "bg-orange-100 text-orange-700",
 		},
 	];
 
 	return (
-		<section className="grid gap-6">
-			<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-				<div>
-					<h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
-						Dashboard
-					</h2>
-					<p className="mt-2 max-w-2xl leading-7 text-slate-600">
-						Your live job search overview, powered by your
-						PostgreSQL application data.
+		<section className="grid gap-6 text-slate-950">
+			<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 md:p-6">
+				<p className="text-sm font-semibold text-slate-500">
+					Offer success rate
+				</p>
+				<div className="mt-3 flex flex-wrap items-end gap-x-5 gap-y-2">
+					<p className="text-5xl font-black text-slate-950 md:text-6xl">
+						{responseRate}%
 					</p>
 				</div>
 
-				<div className="flex flex-col gap-3 sm:flex-row">
-					<Link
-						to="/kanban"
-						className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
-					>
-						View Kanban
-					</Link>
-
-					<Link
-						to="/applications/new"
-						className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
-					>
-						Add application
-					</Link>
+				<div className="mt-6 h-2 rounded-full bg-slate-200">
+					<div
+						className="h-full rounded-full bg-lime-400"
+						style={{
+							width: `${Math.min(responseRate, 100)}%`,
+						}}
+					/>
 				</div>
-			</div>
 
-			<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-				{statCards.map((card) => (
-					<article
-						key={card.label}
-						className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm"
-					>
-						<p className="text-sm font-bold text-slate-500">
-							{card.label}
-						</p>
-						<p className="mt-2 text-3xl font-extrabold">
-							{card.value}
-						</p>
-					</article>
-				))}
-			</div>
+				<div className="mt-4 flex flex-wrap gap-x-7 gap-y-2 text-sm font-medium text-slate-500">
+					<span className="inline-flex items-center gap-2">
+						<span className="h-2 w-2 rounded-full bg-lime-400" />
+						{dashboard.offerCount} offer
+						{dashboard.offerCount === 1 ? "" : "s"} achieved
+					</span>
+					<span className="inline-flex items-center gap-2">
+						<span className="h-2 w-2 rounded-full bg-slate-300" />
+						{dashboard.totalApplications} total applications
+					</span>
+				</div>
+			</section>
 
-			<div className="grid gap-6 xl:grid-cols-2">
-				<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-					<div className="flex items-start justify-between gap-4">
-						<div>
-							<h3 className="text-lg font-extrabold">
-								Recent applications
-							</h3>
-							<p className="mt-1 text-sm text-slate-500">
-								The latest roles you added.
-							</p>
-						</div>
-
+			<div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+				<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 md:p-6">
+					<div className="mb-4 flex items-center justify-between gap-4">
+						<h2 className="font-bold text-slate-950">
+							Recent applications
+						</h2>
 						<Link
-							to="/applications"
-							className="text-sm font-bold text-blue-700 hover:underline"
+							to="/applications/new"
+							className="text-sm font-medium text-slate-500 transition hover:text-slate-950"
 						>
-							View all
+							<Plus className="mr-1 inline-block h-4 w-4" />
+							Add application
 						</Link>
 					</div>
 
 					{dashboard.recentApplications.length === 0 ? (
-						<div className="mt-6 rounded-2xl border border-dashed border-slate-300 p-6 text-center">
+						<div className="border-y border-slate-200 py-8 text-center">
 							<p className="font-bold text-slate-700">
 								No applications added yet.
 							</p>
@@ -168,84 +219,184 @@ export function DashboardPage() {
 							</p>
 						</div>
 					) : (
-						<div className="mt-5 grid gap-3">
-							{dashboard.recentApplications.map((application) => (
-								<Link
-									key={application.id}
-									to={`/applications/${application.id}`}
-									className="rounded-2xl border border-slate-200 p-4 transition hover:bg-slate-50"
-								>
-									<div className="flex items-start justify-between gap-4">
-										<div>
-											<p className="font-extrabold text-slate-950">
-												{application.role}
-											</p>
-											<p className="mt-1 text-sm text-slate-500">
-												{application.company}
-												{application.location
-													? ` · ${application.location}`
-													: ""}
-											</p>
+						<div className="divide-y divide-slate-200 border-y border-slate-200">
+							{dashboard.recentApplications.map((application) => {
+								const progress =
+									getApplicationProgress(application);
+
+								return (
+									<Link
+										key={application.id}
+										to={`/applications/${application.id}`}
+										className="-mx-3 block rounded-xl px-3 py-4 transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-sm hover:shadow-slate-200/80 hover:ring-1 hover:ring-slate-200/80"
+									>
+										<div className="flex items-start justify-between gap-4">
+											<div>
+												<p className="text-sm font-bold text-slate-700">
+													{application.role}
+												</p>
+												<p className="mt-1 text-xs font-normal text-slate-500">
+													{application.company}
+													{application.location
+														? ` - ${application.location}`
+														: ""}
+												</p>
+											</div>
+
+											<span
+												className={[
+													"rounded-full px-3 py-1 text-xs font-bold ring-1",
+													applicationStatusBadgeClasses[
+														application.status
+													],
+												].join(" ")}
+											>
+												{
+													applicationStatusLabels[
+														application.status
+													]
+												}
+											</span>
 										</div>
 
-										<span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
-											{application.status}
-										</span>
-									</div>
-								</Link>
-							))}
+										<div className="mt-4">
+											<div className="h-1 rounded-full bg-slate-100">
+												<div
+													className="h-full rounded-full bg-lime-400"
+													style={{
+														width: `${progress.percent}%`,
+													}}
+												/>
+											</div>
+
+											<div className="mt-2 flex items-center justify-between gap-4 text-xs font-medium text-slate-400">
+												<span>{progress.stage}</span>
+												<span>
+													{progress.percent}%
+													completed
+												</span>
+											</div>
+										</div>
+									</Link>
+								);
+							})}
 						</div>
 					)}
 				</section>
 
-				<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+				<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 md:p-6">
+					<div className="mb-4 flex items-center justify-between gap-4">
+						<h2 className="font-bold text-slate-950">Overview</h2>
+						<span className="group">
+							<Link
+								to="/applications"
+								className="text-sm font-medium text-slate-500 transition group-hover:text-slate-950"
+							>
+								All
+								<ArrowRight className="ml-1 inline-block h-4 w-4 transition group-hover:translate-x-0.5" />
+							</Link>
+						</span>
+					</div>
+
+					<div className="border-t border-slate-200 pt-5">
+						<div className="mb-4 flex justify-between px-2 text-xs font-medium text-slate-400">
+							<span>Metric</span>
+							<span>Count</span>
+						</div>
+
+						<div className="grid gap-3">
+							{statCards.map((card) => {
+								const Icon = card.icon;
+
+								return (
+									<article
+										key={card.label}
+										className="flex items-center justify-between gap-5 rounded-xl p-2 transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-sm hover:shadow-slate-200/80 hover:ring-1 hover:ring-slate-200/80"
+									>
+										<div className="flex items-center gap-4">
+											<span
+												className={[
+													"grid h-10 w-10 place-items-center rounded-lg",
+													card.color,
+												].join(" ")}
+											>
+												<Icon
+													size={18}
+													strokeWidth={2.5}
+												/>
+											</span>
+											<p className="text-sm font-semibold text-slate-950">
+												{card.label}
+											</p>
+										</div>
+
+										<span className="text-right">
+											<span className="block text-sm font-black text-slate-950">
+												{card.value}
+											</span>
+											<span className="block text-[0.65rem] font-medium uppercase tracking-wide text-slate-400">
+												{card.helper}
+											</span>
+										</span>
+									</article>
+								);
+							})}
+						</div>
+					</div>
+				</section>
+			</div>
+
+			<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 md:p-6">
+				<div className="mb-6 flex items-end justify-between gap-4 border-b border-slate-200 pb-3">
 					<div>
-						<h3 className="text-lg font-extrabold">
+						<h2 className="font-bold text-slate-950">
 							Upcoming follow-ups
-						</h3>
+						</h2>
 						<p className="mt-1 text-sm text-slate-500">
 							Applications you may need to chase soon.
 						</p>
 					</div>
+					<span className="rounded-md bg-slate-200/60 px-2.5 py-1 text-xs font-bold text-slate-500">
+						{dashboard.upcomingFollowUpCount} due
+					</span>
+				</div>
 
-					{dashboard.upcomingFollowUps.length === 0 ? (
-						<div className="mt-6 rounded-2xl border border-dashed border-slate-300 p-6 text-center">
-							<p className="font-bold text-slate-700">
-								No upcoming follow-ups.
-							</p>
-							<p className="mt-1 text-sm text-slate-500">
-								Add follow-up dates to stay on top of
-								applications.
-							</p>
-						</div>
-					) : (
-						<div className="mt-5 grid gap-3">
-							{dashboard.upcomingFollowUps.map((application) => (
-								<Link
-									key={application.id}
-									to={`/applications/${application.id}`}
-									className="rounded-2xl border border-slate-200 p-4 transition hover:bg-slate-50"
-								>
-									<div className="flex items-start justify-between gap-4">
-										<div>
-											<p className="font-extrabold text-slate-950">
-												{application.role}
-											</p>
-											<p className="mt-1 text-sm text-slate-500">
-												{application.company}
-											</p>
-										</div>
-
-										<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
-											{formatDate(application.followUpAt)}
-										</span>
+				{dashboard.upcomingFollowUps.length === 0 ? (
+					<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-300">
+						<p className="font-bold text-slate-950">
+							No upcoming follow-ups.
+						</p>
+						<p className="mt-1 text-sm font-medium text-slate-500">
+							Add follow-up dates to stay on top of applications.
+						</p>
+					</div>
+				) : (
+					<div className="divide-y divide-slate-200 border-y border-slate-200">
+						{dashboard.upcomingFollowUps.map((application) => (
+							<Link
+								key={application.id}
+								to={`/applications/${application.id}`}
+								className="-mx-3 block rounded-xl px-3 py-4 transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-sm hover:shadow-slate-200/80 hover:ring-1 hover:ring-slate-200/80"
+							>
+								<div className="flex items-start justify-between gap-4">
+									<div>
+										<p className="font-extrabold text-slate-950">
+											{application.role}
+										</p>
+										<p className="mt-1 text-sm font-semibold text-slate-500">
+											{application.company}
+										</p>
 									</div>
-								</Link>
-							))}
-						</div>
-					)}
-				</section>
-			</div>
+
+									<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-700">
+										{formatDate(application.followUpAt)}
+									</span>
+								</div>
+							</Link>
+						))}
+					</div>
+				)}
+			</section>
 		</section>
 	);
 }

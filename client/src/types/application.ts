@@ -34,8 +34,15 @@ export type Application = {
 	rejectedAt: string | null;
 	offerDeadlineAt: string | null;
 
+	statusTransitions: ApplicationStatusTransition[];
+
 	createdAt: string;
 	updatedAt: string;
+};
+
+export type ApplicationStatusTransition = {
+	status: ApplicationStatus;
+	transitionedAt: string;
 };
 
 export type CreateApplicationInput = {

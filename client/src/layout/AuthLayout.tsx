@@ -37,7 +37,7 @@ export function AuthLayout({
 
 	return (
 		<main className="grid min-h-screen place-items-center bg-slate-50 p-5 text-slate-950">
-			<section className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+			<section className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40 md:p-8">
 				<div className="text-start">
 					<div className="grid h-14 w-14 place-items-center rounded-xl bg-blue-600 text-lg font-extrabold text-white">
 						JT

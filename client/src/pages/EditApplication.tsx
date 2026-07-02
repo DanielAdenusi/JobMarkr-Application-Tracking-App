@@ -92,6 +92,7 @@ export function EditApplicationPage() {
 
 			const updatedApplication = await updateApplication(id, data);
 
+			window.dispatchEvent(new Event("applications:changed"));
 			navigate(`/applications/${updatedApplication.id}`);
 		} catch (err) {
 			setError(
@@ -106,7 +107,7 @@ export function EditApplicationPage() {
 
 	if (isLoading) {
 		return (
-			<section className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+			<section className="rounded-xl border border-slate-200 bg-white p-6 text-center shadow-sm shadow-slate-200/40">
 				<div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
 				<p className="mt-4 font-bold text-slate-700">
 					Loading application...
@@ -117,7 +118,7 @@ export function EditApplicationPage() {
 
 	if (error && !application) {
 		return (
-			<section className="rounded-3xl border border-red-200 bg-red-50 p-8 text-center">
+			<section className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
 				<h2 className="text-lg font-extrabold text-red-900">
 					Application failed to load
 				</h2>
@@ -125,7 +126,7 @@ export function EditApplicationPage() {
 
 				<Link
 					to="/applications"
-					className="mt-5 inline-flex items-center justify-center rounded-2xl border border-red-200 bg-white px-4 py-3 text-sm font-bold text-red-700 transition hover:bg-red-100"
+					className="mt-5 inline-flex h-11 items-center justify-center rounded-lg border border-red-200 bg-white px-4 text-sm font-bold text-red-700 transition hover:bg-red-100"
 				>
 					Back to applications
 				</Link>
@@ -139,25 +140,6 @@ export function EditApplicationPage() {
 
 	return (
 		<section className="grid gap-6">
-			<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-				<div>
-					<h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
-						Edit application
-					</h2>
-					<p className="mt-2 max-w-2xl leading-7 text-slate-600">
-						Update details for {application.role} at{" "}
-						{application.company}.
-					</p>
-				</div>
-
-				<Link
-					to={`/applications/${application.id}`}
-					className="inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
-				>
-					Back to details
-				</Link>
-			</div>
-
 			<ApplicationForm
 				mode="edit"
 				initialValues={initialValues}

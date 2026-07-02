@@ -1,4 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+	Building2,
+	CalendarDays,
+	Clock3,
+	ExternalLink,
+	MapPin,
+	Pencil,
+	Search,
+	Trash2,
+} from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 
 import {
@@ -13,6 +23,13 @@ import {
 	type ApplicationPriority,
 	type ApplicationStatus,
 } from "../constants/applicationOptions";
+import {
+	applicationStatusBadgeClasses,
+	applicationStatusLabels,
+} from "../constants/applicationStatusStyles";
+import { applicationPriorityBadgeClasses } from "../constants/applicationPriorityStyles";
+import { ConfirmationModal } from "../components/ConfirmationModal";
+import { useDebouncedValue } from "../hooks/useDebouncedValue";
 
 import type { Application } from "../types/application";
 
@@ -26,28 +43,52 @@ type SortOption =
 	| "follow_up"
 	| "priority";
 
-const statusBadgeClasses: Record<ApplicationStatus, string> = {
-	wishlist: "bg-slate-100 text-slate-700",
-	saved: "bg-blue-100 text-blue-700",
-	applied: "bg-indigo-100 text-indigo-700",
-	assessment: "bg-purple-100 text-purple-700",
-	interviewing: "bg-amber-100 text-amber-700",
-	offer: "bg-emerald-100 text-emerald-700",
-	rejected: "bg-red-100 text-red-700",
-	withdrawn: "bg-zinc-100 text-zinc-700",
-};
-
-const priorityBadgeClasses: Record<ApplicationPriority, string> = {
-	low: "bg-slate-100 text-slate-700",
-	medium: "bg-blue-100 text-blue-700",
-	high: "bg-red-100 text-red-700",
-};
-
 const priorityRank: Record<ApplicationPriority, number> = {
 	high: 3,
 	medium: 2,
 	low: 1,
 };
+
+function getStatusFilterFromParams(
+	searchParams: URLSearchParams,
+): StatusFilter {
+	const status = searchParams.get("status");
+
+	if (APPLICATION_STATUSES.includes(status as ApplicationStatus)) {
+		return status as ApplicationStatus;
+	}
+
+	return "all";
+}
+
+function getPriorityFilterFromParams(
+	searchParams: URLSearchParams,
+): PriorityFilter {
+	const priority = searchParams.get("priority");
+
+	if (APPLICATION_PRIORITIES.includes(priority as ApplicationPriority)) {
+		return priority as ApplicationPriority;
+	}
+
+	return "all";
+}
+
+function getSortOptionFromParams(searchParams: URLSearchParams): SortOption {
+	const sort = searchParams.get("sort");
+
+	if (
+		sort === "newest" ||
+		sort === "oldest" ||
+		sort === "company_az" ||
+		sort === "company_za" ||
+		sort === "follow_up" ||
+		sort === "priority"
+	) {
+		return sort;
+	}
+
+	return "newest";
+}
 
 function formatOption(value: string) {
 	return value
@@ -57,13 +98,50 @@ function formatOption(value: string) {
 }
 
 function formatDate(value: string | null) {
-	if (!value) return "No date";
+	if (!value) return "-";
 
 	return new Intl.DateTimeFormat("en-GB", {
 		day: "numeric",
 		month: "short",
 		year: "numeric",
 	}).format(new Date(value));
+}
+
+function formatRelativeDate(value: string | null) {
+	if (!value) return "Not applied";
+
+	const date = new Date(value);
+
+	if (Number.isNaN(date.getTime())) return "Not applied";
+
+	const now = new Date();
+	const diffMs = now.getTime() - date.getTime();
+	const diffDays = Math.max(0, Math.floor(diffMs / 86_400_000));
+
+	if (diffDays === 0) return "Applied today";
+	if (diffDays === 1) return "Applied yesterday";
+	return `Applied ${diffDays} days ago`;
+}
+
+function getTrackingDate(application: Application) {
+	if (application.followUpAt) {
+		return {
+			label: "Follow-up",
+			value: formatDate(application.followUpAt),
+		};
+	}
+
+	if (application.deadlineAt) {
+		return {
+			label: "Deadline",
+			value: formatDate(application.deadlineAt),
+		};
+	}
+
+	return {
+		label: "Follow-up",
+		value: "No follow-up",
+	};
 }
 
 function applicationMatchesSearch(
@@ -95,58 +173,26 @@ export function ApplicationsPage() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [isUpdatingId, setIsUpdatingId] = useState<string | null>(null);
 	const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
+	const [deleteTarget, setDeleteTarget] = useState<Application | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [pageSize, setPageSize] = useState(10);
+	const [currentPage, setCurrentPage] = useState(1);
 
 	const [searchParams, setSearchParams] = useSearchParams();
-
-	function getInitialStatusFilter(): StatusFilter {
-		const status = searchParams.get("status");
-
-		if (APPLICATION_STATUSES.includes(status as ApplicationStatus)) {
-			return status as ApplicationStatus;
-		}
-
-		return "all";
-	}
-
-	function getInitialPriorityFilter(): PriorityFilter {
-		const priority = searchParams.get("priority");
-
-		if (APPLICATION_PRIORITIES.includes(priority as ApplicationPriority)) {
-			return priority as ApplicationPriority;
-		}
-
-		return "all";
-	}
-
-	function getInitialSortOption(): SortOption {
-		const sort = searchParams.get("sort");
-
-		if (
-			sort === "newest" ||
-			sort === "oldest" ||
-			sort === "company_az" ||
-			sort === "company_za" ||
-			sort === "follow_up" ||
-			sort === "priority"
-		) {
-			return sort;
-		}
-
-		return "newest";
-	}
 
 	const [searchTerm, setSearchTerm] = useState(
 		() => searchParams.get("q") || "",
 	);
-	const [statusFilter, setStatusFilter] = useState<StatusFilter>(
-		getInitialStatusFilter,
+	const [statusFilter, setStatusFilter] = useState<StatusFilter>(() =>
+		getStatusFilterFromParams(searchParams),
 	);
-	const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(
-		getInitialPriorityFilter,
+	const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>(() =>
+		getPriorityFilterFromParams(searchParams),
 	);
-	const [sortOption, setSortOption] =
-		useState<SortOption>(getInitialSortOption);
+	const [sortOption, setSortOption] = useState<SortOption>(() =>
+		getSortOptionFromParams(searchParams),
+	);
+	const debouncedSearchTerm = useDebouncedValue(searchTerm, 250);
 
 	useEffect(() => {
 		async function loadApplications() {
@@ -169,10 +215,22 @@ export function ApplicationsPage() {
 	}, []);
 
 	useEffect(() => {
+		const nextSearchTerm = searchParams.get("q") || "";
+		const nextStatusFilter = getStatusFilterFromParams(searchParams);
+		const nextPriorityFilter = getPriorityFilterFromParams(searchParams);
+		const nextSortOption = getSortOptionFromParams(searchParams);
+
+		setSearchTerm(nextSearchTerm);
+		setStatusFilter(nextStatusFilter);
+		setPriorityFilter(nextPriorityFilter);
+		setSortOption(nextSortOption);
+	}, [searchParams]);
+
+	useEffect(() => {
 		const params = new URLSearchParams();
 
-		if (searchTerm.trim()) {
-			params.set("q", searchTerm.trim());
+		if (debouncedSearchTerm.trim()) {
+			params.set("q", debouncedSearchTerm.trim());
 		}
 
 		if (statusFilter !== "all") {
@@ -190,13 +248,19 @@ export function ApplicationsPage() {
 		setSearchParams(params, {
 			replace: true,
 		});
-	}, [searchTerm, statusFilter, priorityFilter, sortOption, setSearchParams]);
+	}, [
+		debouncedSearchTerm,
+		statusFilter,
+		priorityFilter,
+		sortOption,
+		setSearchParams,
+	]);
 
 	const filteredApplications = useMemo(() => {
 		const filtered = applications.filter((application) => {
 			const matchesSearch = applicationMatchesSearch(
 				application,
-				searchTerm,
+				debouncedSearchTerm,
 			);
 
 			const matchesStatus =
@@ -246,7 +310,13 @@ export function ApplicationsPage() {
 					);
 			}
 		});
-	}, [applications, searchTerm, statusFilter, priorityFilter, sortOption]);
+	}, [
+		applications,
+		debouncedSearchTerm,
+		statusFilter,
+		priorityFilter,
+		sortOption,
+	]);
 
 	const stats = useMemo(() => {
 		return {
@@ -258,6 +328,29 @@ export function ApplicationsPage() {
 			offers: applications.filter((app) => app.status === "offer").length,
 		};
 	}, [applications, filteredApplications]);
+
+	const totalPages = Math.max(
+		1,
+		Math.ceil(filteredApplications.length / pageSize),
+	);
+	const paginatedApplications = useMemo(() => {
+		const start = (currentPage - 1) * pageSize;
+		return filteredApplications.slice(start, start + pageSize);
+	}, [currentPage, filteredApplications, pageSize]);
+
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [
+		debouncedSearchTerm,
+		statusFilter,
+		priorityFilter,
+		sortOption,
+		pageSize,
+	]);
+
+	useEffect(() => {
+		setCurrentPage((page) => Math.min(page, totalPages));
+	}, [totalPages]);
 
 	async function handleStatusChange(
 		applicationId: string,
@@ -292,6 +385,7 @@ export function ApplicationsPage() {
 						: application,
 				),
 			);
+			window.dispatchEvent(new Event("applications:changed"));
 		} catch (err) {
 			setApplications(previousApplications);
 			setError(
@@ -304,14 +398,11 @@ export function ApplicationsPage() {
 		}
 	}
 
-	async function handleDelete(application: Application) {
-		const confirmed = window.confirm(
-			`Delete ${application.role} at ${application.company}?`,
-		);
-
-		if (!confirmed) return;
+	async function confirmDelete() {
+		if (!deleteTarget) return;
 
 		const previousApplications = applications;
+		const application = deleteTarget;
 
 		try {
 			setError(null);
@@ -322,6 +413,7 @@ export function ApplicationsPage() {
 			);
 
 			await deleteApplication(application.id);
+			window.dispatchEvent(new Event("applications:changed"));
 		} catch (err) {
 			setApplications(previousApplications);
 			setError(
@@ -331,6 +423,7 @@ export function ApplicationsPage() {
 			);
 		} finally {
 			setIsDeletingId(null);
+			setDeleteTarget(null);
 		}
 	}
 
@@ -343,75 +436,69 @@ export function ApplicationsPage() {
 
 	return (
 		<section className="grid gap-6">
-			<div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-				<div>
-					<h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
-						Applications
-					</h2>
-					<p className="mt-2 max-w-2xl leading-7 text-slate-600">
-						Search, filter, update, and manage every role you are
-						tracking.
-					</p>
-				</div>
-
-				<Link
-					to="/applications/new"
-					className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
-				>
-					Add application
-				</Link>
-			</div>
-
 			<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-				<article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-					<p className="text-sm font-bold text-slate-500">Total</p>
-					<p className="mt-2 text-3xl font-extrabold">
+				<article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40">
+					<p className="text-sm font-semibold text-slate-500">
+						Total Applications
+					</p>
+					<p className="mt-3 text-3xl font-black text-slate-950">
 						{stats.total}
 					</p>
 				</article>
 
-				<article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-					<p className="text-sm font-bold text-slate-500">Showing</p>
-					<p className="mt-2 text-3xl font-extrabold">
+				<article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40">
+					<p className="text-sm font-semibold text-slate-500">
+						Showing Results
+					</p>
+					<p className="mt-3 text-3xl font-black text-slate-950">
 						{stats.visible}
 					</p>
 				</article>
 
-				<article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-					<p className="text-sm font-bold text-slate-500">
-						Interview stage
+				<article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40">
+					<p className="text-sm font-semibold text-slate-500">
+						Interview Stage
 					</p>
-					<p className="mt-2 text-3xl font-extrabold">
+					<p className="mt-3 text-3xl font-black text-slate-950">
 						{stats.interviewing}
 					</p>
 				</article>
 
-				<article className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-					<p className="text-sm font-bold text-slate-500">Offers</p>
-					<p className="mt-2 text-3xl font-extrabold">
+				<article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40">
+					<p className="text-sm font-semibold text-slate-500">
+						Total Offers
+					</p>
+					<p className="mt-3 text-3xl font-black text-slate-950">
 						{stats.offers}
 					</p>
 				</article>
 			</div>
 
-			<div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-				<div className="grid gap-4 xl:grid-cols-[1fr_190px_190px_190px_auto] xl:items-end">
+			<div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/40">
+				<div className="grid gap-4 xl:grid-cols-[1fr_160px_160px_160px_auto] xl:items-end">
 					<label className="grid gap-2">
-						<span className="text-sm font-bold text-slate-700">
+						<span className="text-sm font-semibold text-slate-950">
 							Search
 						</span>
-						<input
-							type="search"
-							value={searchTerm}
-							onChange={(event) =>
-								setSearchTerm(event.target.value)
-							}
-							placeholder="Search company, role, location, notes..."
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
-						/>
+						<span className="relative">
+							<Search
+								size={17}
+								strokeWidth={2.25}
+								className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+							/>
+							<input
+								type="search"
+								value={searchTerm}
+								onChange={(event) =>
+									setSearchTerm(event.target.value)
+								}
+								placeholder="Search company, role, location..."
+								className="h-11 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 pl-10 text-sm font-medium outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+							/>
+						</span>
 					</label>
 					<label className="grid gap-2">
-						<span className="text-sm font-bold text-slate-700">
+						<span className="text-sm font-semibold text-slate-950">
 							Status
 						</span>
 						<select
@@ -421,7 +508,7 @@ export function ApplicationsPage() {
 									event.target.value as StatusFilter,
 								)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						>
 							<option value="all">All statuses</option>
 							{APPLICATION_STATUSES.map((status) => (
@@ -432,7 +519,7 @@ export function ApplicationsPage() {
 						</select>
 					</label>
 					<label className="grid gap-2">
-						<span className="text-sm font-bold text-slate-700">
+						<span className="text-sm font-semibold text-slate-950">
 							Priority
 						</span>
 						<select
@@ -442,7 +529,7 @@ export function ApplicationsPage() {
 									event.target.value as PriorityFilter,
 								)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						>
 							<option value="all">All priorities</option>
 							{APPLICATION_PRIORITIES.map((priority) => (
@@ -453,7 +540,7 @@ export function ApplicationsPage() {
 						</select>
 					</label>
 					<label className="grid gap-2">
-						<span className="text-sm font-bold text-slate-700">
+						<span className="text-sm font-semibold text-slate-950">
 							Sort
 						</span>
 						<select
@@ -461,7 +548,7 @@ export function ApplicationsPage() {
 							onChange={(event) =>
 								setSortOption(event.target.value as SortOption)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						>
 							<option value="newest">Newest first</option>
 							<option value="oldest">Oldest first</option>
@@ -474,7 +561,7 @@ export function ApplicationsPage() {
 					<button
 						type="button"
 						onClick={resetFilters}
-						className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+						className="h-11 rounded-lg bg-slate-100 px-5 text-sm font-bold text-slate-700 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-sm hover:ring-1 hover:ring-slate-200"
 					>
 						Reset
 					</button>
@@ -482,13 +569,13 @@ export function ApplicationsPage() {
 			</div>
 
 			{error && (
-				<div className="rounded-3xl border border-red-200 bg-red-50 p-5">
+				<div className="rounded-xl border border-red-200 bg-red-50 p-5">
 					<p className="font-bold text-red-900">{error}</p>
 				</div>
 			)}
 
 			{isLoading && (
-				<div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+				<div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm shadow-slate-200/40">
 					<div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
 					<p className="mt-4 font-bold text-slate-700">
 						Loading applications...
@@ -497,7 +584,7 @@ export function ApplicationsPage() {
 			)}
 
 			{!isLoading && applications.length === 0 && (
-				<div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
+				<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
 					<h3 className="text-lg font-extrabold">
 						No applications yet
 					</h3>
@@ -508,7 +595,7 @@ export function ApplicationsPage() {
 
 					<Link
 						to="/applications/new"
-						className="mt-5 inline-flex items-center justify-center rounded-2xl bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
+						className="mt-5 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700"
 					>
 						Add application
 					</Link>
@@ -518,7 +605,7 @@ export function ApplicationsPage() {
 			{!isLoading &&
 				applications.length > 0 &&
 				filteredApplications.length === 0 && (
-					<div className="rounded-3xl border border-dashed border-slate-300 bg-white p-8 text-center">
+					<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
 						<h3 className="text-lg font-extrabold">
 							No matching applications
 						</h3>
@@ -530,7 +617,7 @@ export function ApplicationsPage() {
 						<button
 							type="button"
 							onClick={resetFilters}
-							className="mt-5 inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
+							className="mt-5 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-100"
 						>
 							Clear filters
 						</button>
@@ -539,140 +626,264 @@ export function ApplicationsPage() {
 
 			{!isLoading && filteredApplications.length > 0 && (
 				<div className="grid gap-4">
-					{filteredApplications.map((application) => (
-						<article
-							key={application.id}
-							className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-						>
-							<div className="grid gap-5 xl:grid-cols-[1fr_220px_180px_auto] xl:items-center">
-								<div className="min-w-0">
-									<div className="flex flex-wrap items-center gap-2">
-										<span
-											className={[
-												"rounded-full px-3 py-1 text-xs font-extrabold",
-												statusBadgeClasses[
-													application.status
-												],
-											].join(" ")}
-										>
-											{formatOption(application.status)}
-										</span>
+					<div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/40 sm:flex-row sm:items-center sm:justify-between">
+						<p className="text-sm font-semibold text-slate-500">
+							Showing {(currentPage - 1) * pageSize + 1}-
+							{Math.min(
+								currentPage * pageSize,
+								filteredApplications.length,
+							)}{" "}
+							of {filteredApplications.length} applications
+						</p>
 
-										<span
-											className={[
-												"rounded-full px-3 py-1 text-xs font-extrabold",
-												priorityBadgeClasses[
-													application.priority
-												],
-											].join(" ")}
-										>
-											{formatOption(application.priority)}
-										</span>
-									</div>
+						<label className="flex items-center gap-2 text-sm font-bold text-slate-600">
+							Rows
+							<select
+								value={pageSize}
+								onChange={(event) =>
+									setPageSize(Number(event.target.value))
+								}
+								className="h-9 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+							>
+								{[10, 20, 50].map((size) => (
+									<option key={size} value={size}>
+										{size}
+									</option>
+								))}
+							</select>
+						</label>
+					</div>
 
-									<h3 className="mt-3 truncate text-lg font-extrabold text-slate-950">
-										{application.role}
-									</h3>
+					{paginatedApplications.map((application) => {
+						const trackingDate = getTrackingDate(application);
 
-									<p className="mt-1 text-sm font-semibold text-slate-500">
-										{application.company}
-										{application.location
-											? ` · ${application.location}`
-											: ""}
-									</p>
+						return (
+							<article
+								key={application.id}
+								className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 transition duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md hover:shadow-slate-200/80"
+							>
+								<div className="grid gap-5 xl:grid-cols-[1fr_auto] xl:items-center">
+									<div className="min-w-0">
+										<div className="flex flex-wrap items-center gap-2">
+											<span
+												className={[
+													"rounded-md px-3 py-1 text-xs font-bold ring-1",
+													applicationPriorityBadgeClasses[
+														application.priority
+													],
+												].join(" ")}
+											>
+												{formatOption(
+													application.priority,
+												)}
+											</span>
 
-									<div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-500">
-										<span>
-											Applied:{" "}
-											<strong className="text-slate-700">
-												{formatDate(
+											<span
+												className={[
+													"rounded-full px-2 py-0.5 text-[0.68rem] font-bold ring-1",
+													applicationStatusBadgeClasses[
+														application.status
+													],
+												].join(" ")}
+											>
+												{
+													applicationStatusLabels[
+														application.status
+													]
+												}
+											</span>
+										</div>
+
+										<h3 className="mt-2 truncate text-lg font-extrabold text-slate-950">
+											{application.role}
+										</h3>
+
+										<div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm font-semibold text-slate-500">
+											<span className="inline-flex items-center gap-1.5">
+												<Building2
+													size={15}
+													strokeWidth={2.25}
+													className="text-slate-400"
+												/>
+												{application.company}
+											</span>
+
+											{application.location && (
+												<span className="inline-flex items-center gap-1.5">
+													<MapPin
+														size={15}
+														strokeWidth={2.25}
+														className="text-slate-400"
+													/>
+													{application.location}
+												</span>
+											)}
+
+											<span className="inline-flex items-center gap-1.5">
+												<Clock3
+													size={14}
+													strokeWidth={2.25}
+													className="text-slate-400"
+												/>
+												{formatRelativeDate(
 													application.appliedAt,
 												)}
-											</strong>
-										</span>
+											</span>
+										</div>
 
-										<span>
-											Follow-up:{" "}
-											<strong className="text-slate-700">
-												{formatDate(
-													application.followUpAt,
-												)}
-											</strong>
-										</span>
+										<div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
+											<span className="inline-flex items-center gap-1.5">
+												<CalendarDays
+													size={14}
+													strokeWidth={2.25}
+													className="text-slate-400"
+												/>
+												{trackingDate.label}:
+												<span className="font-semibold text-slate-700">
+													{trackingDate.value}
+												</span>
+											</span>
+										</div>
+									</div>
+
+									<div className="flex flex-wrap items-center gap-3 xl:justify-end">
+										<select
+											value={application.status}
+											disabled={
+												isUpdatingId === application.id
+											}
+											onChange={(event) =>
+												handleStatusChange(
+													application.id,
+													event.target
+														.value as ApplicationStatus,
+												)
+											}
+											aria-label={`Update status for ${application.role}`}
+											className="h-10 w-40 rounded-lg border border-slate-200 bg-slate-50 px-3 text-sm font-medium text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60 max-xl:flex-1"
+										>
+											{APPLICATION_STATUSES.map(
+												(status) => (
+													<option
+														key={status}
+														value={status}
+													>
+														{
+															applicationStatusLabels[
+																status
+															]
+														}
+													</option>
+												),
+											)}
+										</select>
+										<Link
+											to={`/applications/${application.id}`}
+											className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-800 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:shadow-sm"
+										>
+											Details
+										</Link>
+
+										<span
+											aria-hidden="true"
+											className="hidden h-6 w-px bg-slate-200 xl:inline-block"
+										/>
+
+										{application.jobUrl && (
+											<a
+												href={application.jobUrl}
+												target="_blank"
+												rel="noreferrer"
+												aria-label={`Open job post for ${application.role}`}
+												className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:text-blue-600"
+											>
+												<ExternalLink
+													size={17}
+													strokeWidth={2.25}
+												/>
+											</a>
+										)}
+
+										<Link
+											to={`/applications/${application.id}/edit`}
+											aria-label={`Edit ${application.role}`}
+											className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 transition hover:-translate-y-0.5 hover:bg-slate-50 hover:text-blue-600"
+										>
+											<Pencil
+												size={17}
+												strokeWidth={2.25}
+											/>
+										</Link>
+
+										<button
+											type="button"
+											disabled={
+												isDeletingId === application.id
+											}
+											onClick={() =>
+												setDeleteTarget(application)
+											}
+											aria-label={`Delete ${application.role}`}
+											className="grid h-10 w-10 place-items-center rounded-lg text-slate-400 transition hover:-translate-y-0.5 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+										>
+											<Trash2
+												size={17}
+												strokeWidth={2.25}
+											/>
+										</button>
 									</div>
 								</div>
+							</article>
+						);
+					})}
 
-								<label className="grid gap-2">
-									<span className="text-xs font-bold uppercase tracking-wide text-slate-500">
-										Update status
-									</span>
-									<select
-										value={application.status}
-										disabled={
-											isUpdatingId === application.id
-										}
-										onChange={(event) =>
-											handleStatusChange(
-												application.id,
-												event.target
-													.value as ApplicationStatus,
-											)
-										}
-										className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60"
-									>
-										{APPLICATION_STATUSES.map((status) => (
-											<option key={status} value={status}>
-												{formatOption(status)}
-											</option>
-										))}
-									</select>
-								</label>
+					<div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/40 sm:flex-row sm:items-center sm:justify-between">
+						<button
+							type="button"
+							disabled={currentPage <= 1}
+							onClick={() =>
+								setCurrentPage((page) => Math.max(1, page - 1))
+							}
+							className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							Previous
+						</button>
 
-								<div className="grid gap-2 text-sm">
-									{application.jobUrl ? (
-										<a
-											href={application.jobUrl}
-											target="_blank"
-											rel="noreferrer"
-											className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 px-4 font-bold text-slate-700 transition hover:bg-slate-100"
-										>
-											Open job
-										</a>
-									) : (
-										<span className="inline-flex h-11 items-center justify-center rounded-2xl border border-dashed border-slate-200 px-4 font-bold text-slate-400">
-											No job link
-										</span>
-									)}
+						<p className="text-center text-sm font-bold text-slate-500">
+							Page {currentPage} of {totalPages}
+						</p>
 
-									<Link
-										to={`/applications/${application.id}`}
-										className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 px-4 font-bold text-slate-700 transition hover:bg-slate-100"
-									>
-										View details
-									</Link>
-									<Link
-										to={`/applications/${application.id}/edit`}
-										className="inline-flex h-11 items-center justify-center rounded-2xl border border-slate-200 px-4 font-bold text-slate-700 transition hover:bg-slate-100"
-									>
-										Edit
-									</Link>
-								</div>
-
-								<button
-									type="button"
-									disabled={isDeletingId === application.id}
-									onClick={() => handleDelete(application)}
-									className="h-11 rounded-2xl border border-red-200 bg-white px-4 text-sm font-bold text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
-								>
-									{isDeletingId === application.id
-										? "Deleting..."
-										: "Delete"}
-								</button>
-							</div>
-						</article>
-					))}
+						<button
+							type="button"
+							disabled={currentPage >= totalPages}
+							onClick={() =>
+								setCurrentPage((page) =>
+									Math.min(totalPages, page + 1),
+								)
+							}
+							className="h-10 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+						>
+							Next
+						</button>
+					</div>
 				</div>
 			)}
+
+			<ConfirmationModal
+				isOpen={Boolean(deleteTarget)}
+				title="Delete application?"
+				description={
+					deleteTarget
+						? `This will permanently delete ${deleteTarget.role} at ${deleteTarget.company}. This action cannot be undone.`
+						: ""
+				}
+				confirmLabel="Delete application"
+				isProcessing={Boolean(
+					deleteTarget && isDeletingId === deleteTarget.id,
+				)}
+				onCancel={() => setDeleteTarget(null)}
+				onConfirm={confirmDelete}
+			/>
 		</section>
 	);
 }

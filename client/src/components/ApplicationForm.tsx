@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
 	APPLICATION_PRIORITIES,
 	APPLICATION_STATUSES,
@@ -112,6 +112,11 @@ export function ApplicationForm({
 	const [values, setValues] = useState<ApplicationFormValues>(startingValues);
 	const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+	useEffect(() => {
+		setValues(startingValues);
+		setFieldErrors({});
+	}, [startingValues]);
+
 	function updateField<K extends keyof ApplicationFormValues>(
 		field: K,
 		value: ApplicationFormValues[K],
@@ -187,12 +192,12 @@ export function ApplicationForm({
 	return (
 		<form onSubmit={handleSubmit} className="grid gap-6">
 			{error && (
-				<div className="rounded-3xl border border-red-200 bg-red-50 p-5">
+				<div className="rounded-xl border border-red-200 bg-red-50 p-5">
 					<p className="font-bold text-red-900">{error}</p>
 				</div>
 			)}
 
-			<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
 				<div>
 					<h3 className="text-lg font-extrabold">Role details</h3>
 					<p className="mt-1 text-sm text-slate-500">
@@ -211,7 +216,7 @@ export function ApplicationForm({
 								updateField("company", event.target.value)
 							}
 							placeholder="e.g. Spotify"
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 						{fieldErrors.company && (
 							<span className="text-sm font-semibold text-red-600">
@@ -230,7 +235,7 @@ export function ApplicationForm({
 								updateField("role", event.target.value)
 							}
 							placeholder="e.g. Frontend Developer"
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 						{fieldErrors.role && (
 							<span className="text-sm font-semibold text-red-600">
@@ -249,7 +254,7 @@ export function ApplicationForm({
 								updateField("location", event.target.value)
 							}
 							placeholder="e.g. London"
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 
@@ -262,8 +267,8 @@ export function ApplicationForm({
 							onChange={(event) =>
 								updateField("salary", event.target.value)
 							}
-							placeholder="e.g. £30,000 - £40,000"
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							placeholder="e.g. GBP 30,000 - GBP 40,000"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 
@@ -277,7 +282,7 @@ export function ApplicationForm({
 								updateField("jobUrl", event.target.value)
 							}
 							placeholder="https://example.com/job"
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 						{fieldErrors.jobUrl && (
 							<span className="text-sm font-semibold text-red-600">
@@ -288,7 +293,7 @@ export function ApplicationForm({
 				</div>
 			</section>
 
-			<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
 				<div>
 					<h3 className="text-lg font-extrabold">Tracking details</h3>
 					<p className="mt-1 text-sm text-slate-500">
@@ -309,7 +314,7 @@ export function ApplicationForm({
 									event.target.value as ApplicationStatus,
 								)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						>
 							{APPLICATION_STATUSES.map((status) => (
 								<option key={status} value={status}>
@@ -331,7 +336,7 @@ export function ApplicationForm({
 									event.target.value as ApplicationPriority,
 								)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						>
 							{APPLICATION_PRIORITIES.map((priority) => (
 								<option key={priority} value={priority}>
@@ -353,7 +358,7 @@ export function ApplicationForm({
 									event.target.value as EmploymentType | "",
 								)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						>
 							<option value="">Not set</option>
 							{EMPLOYMENT_TYPES.map((type) => (
@@ -376,7 +381,7 @@ export function ApplicationForm({
 									event.target.value as WorkMode | "",
 								)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						>
 							<option value="">Not set</option>
 							{WORK_MODES.map((mode) => (
@@ -397,13 +402,13 @@ export function ApplicationForm({
 								updateField("source", event.target.value)
 							}
 							placeholder="e.g. LinkedIn, Indeed, company website, referral"
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 				</div>
 			</section>
 
-			<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
 				<div>
 					<h3 className="text-lg font-extrabold">Dates</h3>
 					<p className="mt-1 text-sm text-slate-500">
@@ -423,7 +428,7 @@ export function ApplicationForm({
 							onChange={(event) =>
 								updateField("appliedAt", event.target.value)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 
@@ -437,7 +442,7 @@ export function ApplicationForm({
 							onChange={(event) =>
 								updateField("followUpAt", event.target.value)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 
@@ -451,7 +456,7 @@ export function ApplicationForm({
 							onChange={(event) =>
 								updateField("deadlineAt", event.target.value)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 
@@ -465,7 +470,7 @@ export function ApplicationForm({
 							onChange={(event) =>
 								updateField("interviewAt", event.target.value)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 
@@ -479,7 +484,7 @@ export function ApplicationForm({
 							onChange={(event) =>
 								updateField("rejectedAt", event.target.value)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 
@@ -496,13 +501,13 @@ export function ApplicationForm({
 									event.target.value,
 								)
 							}
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 				</div>
 			</section>
 
-			<section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+			<section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-200/40">
 				<div>
 					<h3 className="text-lg font-extrabold">
 						Contact and notes
@@ -524,7 +529,7 @@ export function ApplicationForm({
 								updateField("contactName", event.target.value)
 							}
 							placeholder="e.g. Jane Smith"
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 
@@ -538,7 +543,7 @@ export function ApplicationForm({
 								updateField("contactEmail", event.target.value)
 							}
 							placeholder="jane@example.com"
-							className="h-12 rounded-2xl border border-slate-200 bg-white px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="h-11 rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 						{fieldErrors.contactEmail && (
 							<span className="text-sm font-semibold text-red-600">
@@ -558,7 +563,7 @@ export function ApplicationForm({
 							}
 							placeholder="Interview notes, application details, recruiter messages, next steps..."
 							rows={6}
-							className="resize-y rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold leading-7 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+							className="resize-y rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold leading-7 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
 						/>
 					</label>
 				</div>
@@ -568,7 +573,7 @@ export function ApplicationForm({
 				<button
 					type="submit"
 					disabled={isSubmitting}
-					className="inline-flex items-center justify-center rounded-2xl bg-blue-600 px-5 py-3 text-sm font-bold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+					className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition hover:-translate-y-0.5 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
 				>
 					{isSubmitting
 						? mode === "create"
