@@ -1,11 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Building2, CalendarDays, GripVertical, Plus } from "lucide-react";
+import {
+	Building2,
+	CalendarDays,
+	GripVertical,
+	Plus,
+	RefreshCw,
+	WifiOff,
+} from "lucide-react";
 
 import {
+	didLastApplicationsLoadUseCache,
 	getApplications,
 	updateApplicationStatus,
 } from "../services/applicationsApi";
+import {
+	getPendingCreateCount,
+	isLocalApplicationId,
+} from "../services/applicationOfflineStore";
 import { EmptyState, Spinner } from "../components/ui/Surface";
 import { SearchInput, Select } from "../components/ui/FormControls";
 import { ButtonLink } from "../components/ui/Button";
@@ -68,6 +80,8 @@ export function KanbanPage() {
 	const [dragOverStatus, setDragOverStatus] =
 		useState<ApplicationStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [isOfflineData, setIsOfflineData] = useState(false);
+	const [pendingCreateCount, setPendingCreateCount] = useState(0);
 	const [boardSearch, setBoardSearch] = useState("");
 	const [companyFilter, setCompanyFilter] = useState("all");
 	const [boardSort, setBoardSort] = useState<BoardSort>("updated_desc");
@@ -130,23 +144,26 @@ export function KanbanPage() {
 		}));
 	}, [boardApplications]);
 
-	useEffect(() => {
-		async function loadApplications() {
-			try {
-				setError(null);
-				const data = await getApplications();
-				setApplications(data);
-			} catch (err) {
-				setError(
-					err instanceof Error
-						? err.message
-						: "Failed to load Kanban board",
-				);
-			} finally {
-				setIsLoading(false);
-			}
+	async function loadApplications() {
+		try {
+			setError(null);
+			setIsLoading(true);
+			const data = await getApplications();
+			setApplications(data);
+			setIsOfflineData(didLastApplicationsLoadUseCache());
+			setPendingCreateCount(getPendingCreateCount());
+		} catch (err) {
+			setError(
+				err instanceof Error
+					? err.message
+					: "Failed to load Kanban board",
+			);
+		} finally {
+			setIsLoading(false);
 		}
+	}
 
+	useEffect(() => {
 		loadApplications();
 	}, []);
 
@@ -187,6 +204,7 @@ export function KanbanPage() {
 					item.id === applicationId ? updatedApplication : item,
 				),
 			);
+			setPendingCreateCount(getPendingCreateCount());
 			window.dispatchEvent(new Event("applications:changed"));
 		} catch (err) {
 			setApplications(previousApplications);
@@ -248,8 +266,65 @@ export function KanbanPage() {
 	return (
 		<section className="flex h-full min-h-0 flex-col gap-6">
 			{error && (
-				<div className="rounded-xl border border-red-200 bg-red-50 p-5">
-					<p className="font-bold text-red-900">{error}</p>
+				<div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm shadow-amber-100/50">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-start gap-3">
+							<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-amber-600 ring-1 ring-amber-200">
+								<WifiOff size={18} strokeWidth={2.5} />
+							</span>
+							<div>
+								<p className="font-extrabold text-amber-950">
+									Kanban board is unavailable
+								</p>
+								<p className="mt-1 text-sm font-medium text-amber-800">
+									{error}. This browser does not have a saved
+									copy to show yet.
+								</p>
+							</div>
+						</div>
+						<button
+							type="button"
+							onClick={loadApplications}
+							className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+						>
+							<RefreshCw size={16} strokeWidth={2.5} />
+							Try again
+						</button>
+					</div>
+				</div>
+			)}
+
+			{!error && (isOfflineData || pendingCreateCount > 0) && (
+				<div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm shadow-amber-100/50">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-start gap-3">
+							<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-amber-600 ring-1 ring-amber-200">
+								<WifiOff size={18} strokeWidth={2.5} />
+							</span>
+							<div>
+								<p className="font-extrabold text-amber-950">
+									Working from browser storage
+								</p>
+								<p className="mt-1 text-sm font-medium text-amber-800">
+									{pendingCreateCount > 0
+										? `${pendingCreateCount} local application${
+												pendingCreateCount === 1
+													? ""
+													: "s"
+											} will sync when the database is available.`
+										: "The database is not reachable, so this board is using the last saved browser copy."}
+								</p>
+							</div>
+						</div>
+						<button
+							type="button"
+							onClick={loadApplications}
+							className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+						>
+							<RefreshCw size={16} strokeWidth={2.5} />
+							Sync now
+						</button>
+					</div>
 				</div>
 			)}
 
@@ -440,10 +515,17 @@ export function KanbanPage() {
 																		],
 																	].join(" ")}
 																>
-																	{formatOption(
-																		application.priority,
+																		{formatOption(
+																			application.priority,
+																		)}
+																	</span>
+																	{isLocalApplicationId(
+																		application.id,
+																	) && (
+																		<span className="inline-flex h-6 items-center rounded-lg bg-amber-100 px-2 text-[0.65rem] font-bold text-amber-700 ring-1 ring-amber-200">
+																			Local
+																		</span>
 																	)}
-																</span>
 
 																<GripVertical
 																	size={17}

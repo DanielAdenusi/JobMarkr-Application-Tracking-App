@@ -35,14 +35,11 @@ export function AccountSettingsProvider({ children }: { children: ReactNode }) {
 	const { user, isAuthLoading } = useAuth();
 	const [settings, setSettings] = useState<UserSettings>(loadLocalSettings);
 	const [isLoadingSettings, setIsLoadingSettings] = useState(false);
-	const visualSettings = user ? settings : defaultSettings;
+	const visualSettings = settings;
 
 	useEffect(() => {
 		applyVisualSettings(visualSettings);
-
-		if (user) {
-			saveLocalSettings(settings);
-		}
+		saveLocalSettings(settings);
 	}, [settings, user, visualSettings]);
 
 	useEffect(() => {
@@ -89,21 +86,43 @@ export function AccountSettingsProvider({ children }: { children: ReactNode }) {
 		};
 	}, [isAuthLoading, user]);
 
-	const saveSettings = useCallback(async (nextSettings: UserSettings) => {
-		const savedSettings = await updateUserSettings(nextSettings);
+	const saveSettings = useCallback(
+		async (nextSettings: UserSettings) => {
+			if (!user) {
+				const normalizedSettings = {
+					...defaultSettings,
+					...nextSettings,
+				};
 
-		setSettings(savedSettings);
+				setSettings(normalizedSettings);
+				saveLocalSettings(normalizedSettings);
 
-		return savedSettings;
-	}, []);
+				return normalizedSettings;
+			}
+
+			const savedSettings = await updateUserSettings(nextSettings);
+
+			setSettings(savedSettings);
+
+			return savedSettings;
+		},
+		[user],
+	);
 
 	const resetSettings = useCallback(async () => {
+		if (!user) {
+			setSettings(defaultSettings);
+			saveLocalSettings(defaultSettings);
+
+			return defaultSettings;
+		}
+
 		const savedSettings = await updateUserSettings(defaultSettings);
 
 		setSettings(savedSettings);
 
 		return savedSettings;
-	}, []);
+	}, [user]);
 
 	const value = useMemo(
 		() => ({

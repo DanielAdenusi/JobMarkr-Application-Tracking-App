@@ -6,15 +6,22 @@ import {
 	ExternalLink,
 	MapPin,
 	Pencil,
+	RefreshCw,
 	Trash2,
+	WifiOff,
 } from "lucide-react";
 import { Link, useSearchParams } from "react-router";
 
 import {
 	deleteApplication,
+	didLastApplicationsLoadUseCache,
 	getApplications,
 	updateApplicationStatus,
 } from "../services/applicationsApi";
+import {
+	getPendingCreateCount,
+	isLocalApplicationId,
+} from "../services/applicationOfflineStore";
 
 import {
 	APPLICATION_PRIORITIES,
@@ -189,6 +196,8 @@ export function ApplicationsPage() {
 	const [isDeletingId, setIsDeletingId] = useState<string | null>(null);
 	const [deleteTarget, setDeleteTarget] = useState<Application | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [isOfflineData, setIsOfflineData] = useState(false);
+	const [pendingCreateCount, setPendingCreateCount] = useState(0);
 	const [pageSize, setPageSize] = useState(getInitialPageSize);
 	const [currentPage, setCurrentPage] = useState(1);
 
@@ -208,23 +217,26 @@ export function ApplicationsPage() {
 	);
 	const debouncedSearchTerm = useDebouncedValue(searchTerm, 250);
 
-	useEffect(() => {
-		async function loadApplications() {
-			try {
-				setError(null);
-				const data = await getApplications();
-				setApplications(data);
-			} catch (err) {
-				setError(
-					err instanceof Error
-						? err.message
-						: "Failed to load applications",
-				);
-			} finally {
-				setIsLoading(false);
-			}
+	async function loadApplications() {
+		try {
+			setError(null);
+			setIsLoading(true);
+			const data = await getApplications();
+			setApplications(data);
+			setIsOfflineData(didLastApplicationsLoadUseCache());
+			setPendingCreateCount(getPendingCreateCount());
+		} catch (err) {
+			setError(
+				err instanceof Error
+					? err.message
+					: "Failed to load applications",
+			);
+		} finally {
+			setIsLoading(false);
 		}
+	}
 
+	useEffect(() => {
 		loadApplications();
 	}, []);
 
@@ -399,6 +411,7 @@ export function ApplicationsPage() {
 						: application,
 				),
 			);
+			setPendingCreateCount(getPendingCreateCount());
 			window.dispatchEvent(new Event("applications:changed"));
 		} catch (err) {
 			setApplications(previousApplications);
@@ -427,6 +440,7 @@ export function ApplicationsPage() {
 			);
 
 			await deleteApplication(application.id);
+			setPendingCreateCount(getPendingCreateCount());
 			window.dispatchEvent(new Event("applications:changed"));
 		} catch (err) {
 			setApplications(previousApplications);
@@ -567,8 +581,65 @@ export function ApplicationsPage() {
 			</div>
 
 			{error && (
-				<div className="rounded-xl border border-red-200 bg-red-50 p-5">
-					<p className="font-bold text-red-900">{error}</p>
+				<div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm shadow-amber-100/50">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-start gap-3">
+							<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-amber-600 ring-1 ring-amber-200">
+								<WifiOff size={18} strokeWidth={2.5} />
+							</span>
+							<div>
+								<p className="font-extrabold text-amber-950">
+									Applications are unavailable
+								</p>
+								<p className="mt-1 text-sm font-medium text-amber-800">
+									{error}. This browser does not have a saved
+									copy to show yet.
+								</p>
+							</div>
+						</div>
+						<button
+							type="button"
+							onClick={loadApplications}
+							className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+						>
+							<RefreshCw size={16} strokeWidth={2.5} />
+							Try again
+						</button>
+					</div>
+				</div>
+			)}
+
+			{!error && (isOfflineData || pendingCreateCount > 0) && (
+				<div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm shadow-amber-100/50">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-start gap-3">
+							<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-amber-600 ring-1 ring-amber-200">
+								<WifiOff size={18} strokeWidth={2.5} />
+							</span>
+							<div>
+								<p className="font-extrabold text-amber-950">
+									Working from browser storage
+								</p>
+								<p className="mt-1 text-sm font-medium text-amber-800">
+									{pendingCreateCount > 0
+										? `${pendingCreateCount} local application${
+												pendingCreateCount === 1
+													? ""
+													: "s"
+											} will sync when the database is available.`
+										: "The database is not reachable, so this list is using the last saved browser copy."}
+								</p>
+							</div>
+						</div>
+						<button
+							type="button"
+							onClick={loadApplications}
+							className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+						>
+							<RefreshCw size={16} strokeWidth={2.5} />
+							Sync now
+						</button>
+					</div>
 				</div>
 			)}
 
@@ -687,6 +758,13 @@ export function ApplicationsPage() {
 													]
 												}
 											</span>
+											{isLocalApplicationId(
+												application.id,
+											) && (
+												<span className="rounded-full bg-amber-100 px-2 py-0.5 text-[0.68rem] font-bold text-amber-700 ring-1 ring-amber-200">
+													Waiting to sync
+												</span>
+											)}
 										</div>
 
 										<h3 className="mt-2 truncate text-lg font-extrabold text-slate-950">

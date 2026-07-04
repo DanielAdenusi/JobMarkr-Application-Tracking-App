@@ -24,4 +24,5 @@ export type DashboardStats = {
 	overdueFollowUpCount: number;
 	recentApplications: DashboardApplicationSummary[];
 	upcomingFollowUps: DashboardApplicationSummary[];
+	isOffline?: boolean;
 };

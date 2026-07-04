@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { BriefcaseBusiness } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../auth/useAuth";
+import { Logo } from "../components/ui/Logo";
+import { IconButtonLink } from "../components/ui/IconButton";
 
 type AuthLayoutProps = {
 	headerTitle?: string;
@@ -66,18 +68,15 @@ export function AuthLayout({
 		<main className="auth-page grid min-h-dvh place-items-center px-5 py-10">
 			<section className="auth-card grid w-full max-w-7xl overflow-hidden rounded-[18px] md:grid-cols-[0.92fr_1.08fr]">
 				<div className="flex flex-col self-center px-6 py-9 sm:px-10 sm:py-12 lg:px-12">
-					<Link
+					<IconButtonLink
 						to="/"
-						className="auth-logo mb-10 inline-flex items-center gap-3 rounded-xl outline-none transition focus-visible:ring-2 focus-visible:ring-offset-4 sm:mb-12"
+						label="Go to home page"
 						aria-label="Go to home page"
+						variant="primary"
+						className="mb-8"
 					>
-						<span className="auth-logo-mark grid h-9 w-9 place-items-center rounded-lg font-mono text-xs font-bold">
-							JT
-						</span>
-						<span className="text-lg font-black tracking-tight">
-							JobTracker
-						</span>
-					</Link>
+						<Logo size={32} background="icon" />
+					</IconButtonLink>
 
 					<h1 className="auth-title text-3xl font-bold tracking-tight">
 						{headerTitle}

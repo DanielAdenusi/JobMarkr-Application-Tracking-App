@@ -26,7 +26,7 @@ const baseVariantClass = "hover:shadow-sm hover:-translate-y-0.5";
 export const buttonVariantClasses: Record<ButtonVariant, string> = {
 	primary: `app-accent-button shadow-sm ${baseVariantClass}`,
 	secondary: `border ${baseVariantClass}`,
-	ghost: `${baseVariantClass}`,
+	ghost: `!bg-transparent ${baseVariantClass}`,
 	text: `underline decoration-transparent hover:decoration-current`,
 	neutral: `border ${baseVariantClass}`,
 	accent: `border ${baseVariantClass}`,
@@ -87,16 +87,25 @@ export function buttonClassNames({
 	size = "md",
 	variant = "secondary",
 	tone,
+	type,
 }: {
 	className?: string;
 	size?: ButtonSize;
 	variant?: ButtonVariant;
 	tone?: ButtonTone;
+	type?: "button" | "submit" | "reset";
 }) {
 	const { variantClass, toneClass } = resolveButtonClasses({ variant, tone });
 
 	const isTextVariant = variant === "text";
-	const extraClass = isTextVariant ? "" : "rounded-lg font-bold";
+	const isSubmitButton = type === "submit";
+
+	const extraClass = [
+		!isTextVariant && "rounded-lg font-bold",
+		isSubmitButton && "cursor-pointer",
+	]
+		.filter(Boolean)
+		.join(" ");
 
 	const baseClasses = `inline-flex items-center justify-center gap-2 transition disabled:cursor-not-allowed disabled:opacity-40 ${extraClass}`;
 
@@ -129,7 +138,13 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
 		<button
 			ref={ref}
 			type={type}
-			className={buttonClassNames({ className, size, variant, tone })}
+			className={buttonClassNames({
+				className,
+				size,
+				variant,
+				tone,
+				type,
+			})}
 			{...props}
 		>
 			{isLoading ? <Spinner size="sm" /> : icon}

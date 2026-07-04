@@ -13,6 +13,7 @@ const pageTitles = [
 	{ path: "/account", title: "Account" },
 	{ path: "/account/*", title: "Account" },
 	{ path: "/help", title: "Help" },
+	{ path: "/contact", title: "Contact" },
 ];
 
 export function PageTitle() {
@@ -28,7 +29,7 @@ export function PageTitle() {
 		const title = currentPage
 			? `${currentPage.title} - ${APP_NAME}`
 			: isHomePage
-				? `${APP_NAME} — Job Tracking App`
+				? `${APP_NAME} - Job Tracking App`
 				: APP_NAME;
 
 		document.title = title;

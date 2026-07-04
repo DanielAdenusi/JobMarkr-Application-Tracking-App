@@ -10,17 +10,22 @@ import { ApplicationDetailsPage } from "./pages/ApplicationDetails";
 import { AccountSettingsPage } from "./pages/AccountSettings";
 import { NotFoundPage } from "./pages/NotFound";
 import { HomePage } from "./pages/Home";
+import { HelpPage } from "./pages/Help";
+import { ContactPage } from "./pages/Contact";
 import { LoginPage } from "./pages/Auth/Login";
 import { SignUpPage } from "./pages/Auth/SignUp";
 import { ForgotPasswordPage } from "./pages/Auth/ForgotPassword";
 import { ResetPasswordPage } from "./pages/Auth/ResetPassword";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { EditApplicationPage } from "./pages/EditApplication";
+import { APP_NAME } from "./constants/pageTitle";
 
 function App() {
 	return (
 		<Routes>
 			<Route path="/" element={<HomePage />} />
+			<Route path="/help" element={<HelpPage />} />
+			<Route path="/contact" element={<ContactPage />} />
 
 			<Route
 				element={
@@ -68,7 +73,7 @@ function App() {
 				element={
 					<AuthLayout
 						headerTitle="Choose a new password"
-						headerSubtitle="Create a fresh password for your Job Tracker account. Need another link?"
+						headerSubtitle={`Create a fresh password for your ${APP_NAME} account. Need another link?`}
 						headerLinkText="Start again"
 						linkTo="/forgot-password"
 						redirectAuthenticated={false}

@@ -22,6 +22,8 @@ import {
 	Sun,
 	Monitor,
 	Moon,
+	MailCheck,
+	RefreshCw,
 } from "lucide-react";
 import { useAuth } from "../auth/useAuth";
 import type { ApplicationStatus } from "../constants/applicationOptions";
@@ -31,7 +33,11 @@ import { getApplications } from "../services/applicationsApi";
 import { PageHeading } from "../components/PageHeading";
 import { useAccountSettings } from "../context/AccountSettingsContext";
 import type { Theme } from "../lib/accountSettings";
-import { ButtonLink } from "../components/ui/Button";
+import { Button, ButtonLink } from "../components/ui/Button";
+import { APP_NAME } from "../constants/pageTitle";
+import { Logo } from "../components/ui/Logo";
+import { useToast } from "../components/ToastProvider";
+import { getAuthErrorMessage } from "../pages/Auth/sharedAuthUi";
 
 const mainNavItems = [
 	{
@@ -150,8 +156,7 @@ function getCurrentPageLabel(pathname: string) {
 	return (
 		[...PAGE_HEADERS]
 			.sort((a, b) => b.path.length - a.path.length)
-			.find((item) => pathname.startsWith(item.path))?.label ||
-		"Job Tracker"
+			.find((item) => pathname.startsWith(item.path))?.label || APP_NAME
 	);
 }
 
@@ -313,7 +318,7 @@ function SidebarLink({
 }: {
 	to: string;
 	label: string;
-	icon: LucideIcon;
+	icon?: LucideIcon;
 	end?: boolean;
 	onClick?: () => void;
 }) {
@@ -350,11 +355,15 @@ function SidebarLink({
 				<span className="app-accent-bg absolute -left-5 h-6 w-1 rounded-r-full opacity-25" />
 			)}
 
-			<Icon
-				size={18}
-				strokeWidth={2.5}
-				className={isActive ? sidebarIconActive : sidebarIconInactive}
-			/>
+			{Icon && (
+				<Icon
+					size={18}
+					strokeWidth={2.5}
+					className={
+						isActive ? sidebarIconActive : sidebarIconInactive
+					}
+				/>
+			)}
 
 			<span className="truncate">{label}</span>
 		</Link>
@@ -573,12 +582,16 @@ function HeaderActionLink({ action }: { action: HeaderAction }) {
 }
 
 export function AppLayout() {
-	const { user, logout } = useAuth();
+	const { user, logout, sendVerificationEmail, refreshUser } = useAuth();
 	const navigate = useNavigate();
 	const location = useLocation();
+	const { showToast } = useToast();
 	const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
 	const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
 	const [isLoggingOut, setIsLoggingOut] = useState(false);
+	const [isSendingVerification, setIsSendingVerification] = useState(false);
+	const [isRefreshingVerification, setIsRefreshingVerification] =
+		useState(false);
 	const [pipelineCounts, setPipelineCounts] = useState<
 		Record<ApplicationStatus, number>
 	>({
@@ -668,6 +681,39 @@ export function AppLayout() {
 		}
 	}
 
+	async function handleSendVerificationEmail() {
+		try {
+			setIsSendingVerification(true);
+			await sendVerificationEmail();
+			showToast("Verification email sent.", "success");
+		} catch (error) {
+			showToast(
+				getAuthErrorMessage(
+					error,
+					"Could not send verification email.",
+				),
+				"error",
+			);
+		} finally {
+			setIsSendingVerification(false);
+		}
+	}
+
+	async function handleRefreshVerification() {
+		try {
+			setIsRefreshingVerification(true);
+			await refreshUser();
+			showToast("Verification status refreshed.", "success");
+		} catch (error) {
+			showToast(
+				getAuthErrorMessage(error, "Could not refresh your account."),
+				"error",
+			);
+		} finally {
+			setIsRefreshingVerification(false);
+		}
+	}
+
 	const isAccountPage =
 		location.pathname === "/account" ||
 		location.pathname.startsWith("/account/");
@@ -732,7 +778,7 @@ export function AppLayout() {
 
 								<div className="min-w-0">
 									<p className="truncate text-sm font-black text-slate-950">
-										Job Tracker
+										{APP_NAME}
 									</p>
 								</div>
 							</div>
@@ -772,18 +818,17 @@ export function AppLayout() {
 				<div className="flex h-20 flex-col justify-center border-b border-slate-200 px-5">
 					<span className="relative">
 						<Link
-							to="/"
-							className="flex min-h-11 min-w-0 items-center gap-3 rounded-xl px-2 transition duration-200 ease-out hover:-translate-y-0.5 hover:bg-white hover:shadow-sm hover:shadow-slate-200/80 hover:ring-1 hover:ring-slate-200/80"
+							to={"/"}
+							className={[
+								sidebarItemBase.replace("gap-3", "gap-2"),
+								sidebarItemInactive.replace(
+									"hover:-translate-y-0.5",
+									"",
+								),
+								"py-2",
+							].join(" ")}
 						>
-							<div className="app-accent-bg grid h-9 w-9 place-items-center rounded-lg text-lg font-black text-white">
-								JT
-							</div>
-
-							<div className="min-w-0">
-								<p className="truncate text-base font-black text-slate-950">
-									JobTracker
-								</p>
-							</div>
+							<Logo hasTitle />
 						</Link>
 					</span>
 				</div>
@@ -812,6 +857,55 @@ export function AppLayout() {
 						: "overflow-y-auto",
 				].join(" ")}
 			>
+				{user?.email && !user.emailVerified && (
+					<div className="border-b border-(--verification-banner-border) bg-(--verification-banner-bg) px-6 py-3 text-(--verification-banner-text) lg:px-10">
+						<div className="mx-auto flex w-full max-w-[1680px] flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+							<div className="flex min-w-0 items-start gap-3">
+								<MailCheck
+									size={20}
+									strokeWidth={2.5}
+									className="mt-0.5 shrink-0 text-(--verification-banner-icon)"
+								/>
+								<div className="min-w-0">
+									<p className="text-sm font-black">
+										Verify your email to secure this
+										account.
+									</p>
+									<p className="mt-0.5 text-sm font-medium leading-5 text-(--verification-banner-muted)">
+										We use verification for sensitive
+										account changes and recovery.
+									</p>
+								</div>
+							</div>
+							<div className="flex shrink-0 flex-wrap gap-2">
+								<Button
+									variant="primary"
+									size="sm"
+									isLoading={isSendingVerification}
+									disabled={isSendingVerification}
+									onClick={() =>
+										void handleSendVerificationEmail()
+									}
+								>
+									Send link
+								</Button>
+								<Button
+									variant="secondary"
+									size="sm"
+									isLoading={isRefreshingVerification}
+									disabled={isRefreshingVerification}
+									onClick={() =>
+										void handleRefreshVerification()
+									}
+								>
+									<RefreshCw size={15} strokeWidth={2.4} />
+									Refresh
+								</Button>
+							</div>
+						</div>
+					</div>
+				)}
+
 				{!isApplicationDetailsPage && (
 					<header
 						className={[
@@ -850,7 +944,7 @@ export function AppLayout() {
 
 			<ConfirmationModal
 				isOpen={isLogoutModalOpen}
-				title="Log out of JobTracker?"
+				title={`Log out of ${APP_NAME}?`}
 				description="You will need to sign in again before you can view or update your applications."
 				confirmLabel="Log out"
 				isProcessing={isLoggingOut}

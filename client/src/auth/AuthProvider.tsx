@@ -8,12 +8,18 @@ import {
 } from "react";
 import { type User } from "firebase/auth";
 import {
+	beginEmailChange,
+	changeCurrentPassword,
 	completeGoogleRedirectLogin,
+	deleteCurrentUser,
 	listenToAuthChanges,
 	loginWithEmail,
 	loginWithGoogle,
 	logout,
+	reauthenticateCurrentUser,
+	refreshCurrentUser,
 	sendPasswordReset,
+	sendVerificationEmail,
 	signUpWithEmail,
 } from "../services/authenticationApi";
 
@@ -24,6 +30,15 @@ type AuthContextValue = {
 	loginWithGoogle: () => Promise<User | null>;
 	signUpWithEmail: (email: string, password: string) => Promise<void>;
 	sendPasswordReset: (email: string) => Promise<void>;
+	sendVerificationEmail: () => Promise<void>;
+	refreshUser: () => Promise<void>;
+	changePassword: (
+		currentPassword: string,
+		newPassword: string,
+	) => Promise<void>;
+	changeEmail: (newEmail: string, password?: string) => Promise<void>;
+	reauthenticate: (password?: string) => Promise<void>;
+	deleteAccount: () => Promise<void>;
 	logout: () => Promise<void>;
 };
 
@@ -70,6 +85,38 @@ export function AuthProvider({ children }: AuthProviderProps) {
 		await sendPasswordReset(email);
 	}, []);
 
+	const handleSendVerificationEmail = useCallback(async () => {
+		await sendVerificationEmail();
+	}, []);
+
+	const handleRefreshUser = useCallback(async () => {
+		const refreshedUser = await refreshCurrentUser();
+		setUser(refreshedUser);
+	}, []);
+
+	const handleChangePassword = useCallback(
+		async (currentPassword: string, newPassword: string) => {
+			await changeCurrentPassword(currentPassword, newPassword);
+		},
+		[],
+	);
+
+	const handleChangeEmail = useCallback(
+		async (newEmail: string, password?: string) => {
+			await beginEmailChange(newEmail, password);
+		},
+		[],
+	);
+
+	const handleReauthenticate = useCallback(async (password?: string) => {
+		await reauthenticateCurrentUser(password);
+	}, []);
+
+	const handleDeleteAccount = useCallback(async () => {
+		await deleteCurrentUser();
+		setUser(null);
+	}, []);
+
 	const handleLogout = useCallback(async () => {
 		await logout();
 	}, []);
@@ -82,6 +129,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 			loginWithGoogle: handleLoginWithGoogle,
 			signUpWithEmail: handleSignUpWithEmail,
 			sendPasswordReset: handleSendPasswordReset,
+			sendVerificationEmail: handleSendVerificationEmail,
+			refreshUser: handleRefreshUser,
+			changePassword: handleChangePassword,
+			changeEmail: handleChangeEmail,
+			reauthenticate: handleReauthenticate,
+			deleteAccount: handleDeleteAccount,
 			logout: handleLogout,
 		}),
 		[
@@ -91,6 +144,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 			handleLoginWithGoogle,
 			handleSignUpWithEmail,
 			handleSendPasswordReset,
+			handleSendVerificationEmail,
+			handleRefreshUser,
+			handleChangePassword,
+			handleChangeEmail,
+			handleReauthenticate,
+			handleDeleteAccount,
 			handleLogout,
 		],
 	);

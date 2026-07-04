@@ -50,7 +50,7 @@ export function Field({
 }
 
 const controlClasses =
-	"h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[var(--app-accent)] focus:bg-white focus:ring-4 focus:ring-[var(--app-accent-ring)] disabled:cursor-not-allowed disabled:opacity-60";
+	"h-10 w-full rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-(--app-accent) focus:bg-white focus:ring-4 focus:ring-(--app-accent-ring) disabled:cursor-not-allowed disabled:opacity-60";
 
 export const TextInput = forwardRef<
 	HTMLInputElement,

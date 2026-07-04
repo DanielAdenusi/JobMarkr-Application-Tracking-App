@@ -101,6 +101,8 @@ export function getAuthErrorMessage(error: unknown, fallback: string) {
 			return "Use a password with at least 6 characters.";
 		case "auth/too-many-requests":
 			return "Too many attempts. Wait a moment, then try again.";
+		case "auth/requires-recent-login":
+			return "Confirm your identity again before making this account change.";
 		case "auth/popup-closed-by-user":
 			return "The Google sign-in window was closed before finishing.";
 		case "auth/popup-blocked":

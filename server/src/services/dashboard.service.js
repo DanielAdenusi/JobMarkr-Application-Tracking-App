@@ -65,7 +65,7 @@ export async function getDashboardStats(userId) {
     FROM applications
     WHERE user_id = $1
     ORDER BY created_at DESC
-    LIMIT 5
+    LIMIT 3
     `,
 		[userId],
 	);
@@ -87,7 +87,7 @@ export async function getDashboardStats(userId) {
     AND follow_up_at >= CURRENT_DATE
     AND status NOT IN ('rejected', 'withdrawn')
     ORDER BY follow_up_at ASC
-    LIMIT 5
+    LIMIT 3
     `,
 		[userId],
 	);

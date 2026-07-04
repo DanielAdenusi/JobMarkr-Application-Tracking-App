@@ -11,6 +11,7 @@ import {
 	MessageSquare,
 	Pencil,
 	Trash2,
+	WifiOff,
 } from "lucide-react";
 import {
 	applicationStatusBadgeClasses,
@@ -22,6 +23,7 @@ import {
 	updateApplication,
 	updateApplicationStatus,
 } from "../services/applicationsApi";
+import { isLocalApplicationId } from "../services/applicationOfflineStore";
 import type { ApplicationStatus } from "../constants/applicationOptions";
 import type { Application } from "../types/application";
 import { ConfirmationModal } from "../components/ConfirmationModal";
@@ -271,9 +273,31 @@ export function ApplicationDetailsPage() {
 	const notesHaveChanges = notesDraft !== (application.notes || "");
 	const nextStatus = getNextStatus(application.status);
 	const timelineTransitions = getTimelineTransitions(application);
+	const isLocalApplication = isLocalApplicationId(application.id);
 
 	return (
 		<section className="grid min-w-0 max-w-full gap-6 overflow-x-hidden">
+			{isLocalApplication && (
+				<div className="rounded-xl border border-amber-200 bg-amber-50 p-5 shadow-sm shadow-amber-100/50">
+					<div className="flex items-start gap-3">
+						<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-amber-600 ring-1 ring-amber-200">
+							<WifiOff size={18} strokeWidth={2.5} />
+						</span>
+						<div>
+							<p className="font-extrabold text-amber-950">
+								Saved in this browser
+							</p>
+							<p className="mt-1 text-sm font-medium text-amber-800">
+								This application was added while the database
+								was unavailable. It will be created in the
+								database the next time application sync
+								succeeds.
+							</p>
+						</div>
+					</div>
+				</div>
+			)}
+
 			<div className="flex flex-wrap items-center justify-between gap-3">
 				<Link
 					to="/applications"

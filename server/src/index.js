@@ -40,7 +40,7 @@ app.get("/api/db-test", async (req, res) => {
 app.get("/api/health", (req, res) => {
 	res.json({
 		status: "ok",
-		message: "Job Tracker API is running",
+		message: "JobMarkr API is running",
 		timestamp: new Date().toISOString(),
 	});
 });

@@ -39,7 +39,7 @@ export async function requireAuth(req, res, next) {
 		const token = authHeader.split("Bearer ")[1];
 		tokenDetails = decodeTokenPayload(token);
 
-		decodedToken = await adminAuth.verifyIdToken(token);
+		decodedToken = await adminAuth.verifyIdToken(token, true);
 	} catch (error) {
 		const authError = {
 			code: error?.code,

@@ -25,7 +25,7 @@ export function EmptyState({ children, className }: SurfaceProps) {
 	return (
 		<div
 			className={cn(
-				"rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center",
+				"rounded-xl  border border-dashed border-slate-100 bg-slate-100 px-4 py-12 text-center flex-1 flex flex-col items-center justify-center gap-2",
 				className,
 			)}
 		>

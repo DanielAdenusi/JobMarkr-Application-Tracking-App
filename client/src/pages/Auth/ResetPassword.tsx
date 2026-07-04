@@ -177,6 +177,13 @@ export function ResetPasswordPage() {
 
 	return (
 		<form className="mt-8" onSubmit={handlePasswordReset}>
+			<input
+				type="hidden"
+				name="username"
+				value={email}
+				autoComplete="username"
+				readOnly
+			/>
 			<p className="auth-subtitle mb-5 text-sm font-semibold">
 				Resetting password for{" "}
 				<span className="auth-title font-black">{email}</span>
@@ -184,6 +191,7 @@ export function ResetPasswordPage() {
 
 			<AuthField
 				id="reset-new-password"
+				name="new-password"
 				label="New password"
 				type={showPassword.main ? "text" : "password"}
 				value={password}
@@ -235,6 +243,7 @@ export function ResetPasswordPage() {
 
 			<AuthField
 				id="reset-confirm-password"
+				name="confirm-new-password"
 				label="Confirm password"
 				type={showPassword.confirm ? "text" : "password"}
 				value={confirmPassword}

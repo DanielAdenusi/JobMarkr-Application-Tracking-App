@@ -49,6 +49,10 @@ import {
 	getApplications,
 } from "../services/applicationsApi";
 import {
+	deleteBackendAccount,
+	signOutEverywhere,
+} from "../services/accountApi";
+import {
 	clearLocalSettings,
 	normalizeSettings,
 	tableRowOptions,
@@ -58,13 +62,17 @@ import {
 	type SettingsTab,
 	type UserSettings,
 } from "../lib/accountSettings";
+import { getAuthErrorMessage } from "./Auth/sharedAuthUi";
 import type { Application, CreateApplicationInput } from "../types/application";
 
 type DangerAction =
 	| "reset_preferences"
 	| "clear_local_data"
 	| "clear_applications"
+	| "sign_out_all"
 	| null;
+
+type AccountDialog = "email" | "password" | "delete" | null;
 
 const tabs: { id: SettingsTab; label: string }[] = [
 	{ id: "settings", label: "Settings" },
@@ -297,13 +305,20 @@ function PrimaryButton({
 	children,
 	onClick,
 	disabled,
+	isLoading,
 }: {
 	children: ReactNode;
 	onClick?: () => void;
 	disabled?: boolean;
+	isLoading?: boolean;
 }) {
 	return (
-		<Button variant="secondary" onClick={onClick} disabled={disabled}>
+		<Button
+			variant="secondary"
+			onClick={onClick}
+			disabled={disabled}
+			isLoading={isLoading}
+		>
 			{children}
 		</Button>
 	);
@@ -336,8 +351,142 @@ function SaveSectionButton({
 	);
 }
 
+function AccountActionModal({
+	isOpen,
+	title,
+	description,
+	confirmLabel,
+	isProcessing,
+	confirmDisabled = false,
+	children,
+	onConfirm,
+	onCancel,
+}: {
+	isOpen: boolean;
+	title: string;
+	description: string;
+	confirmLabel: string;
+	isProcessing: boolean;
+	confirmDisabled?: boolean;
+	children: ReactNode;
+	onConfirm: () => void;
+	onCancel: () => void;
+}) {
+	if (!isOpen) return null;
+
+	return (
+		<div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/15 px-4 py-6 backdrop-blur-sm">
+			<form
+				onSubmit={(event) => {
+					event.preventDefault();
+					onConfirm();
+				}}
+				className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl shadow-slate-950/20"
+			>
+				<h2 className="text-lg font-black text-slate-950">{title}</h2>
+				<p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+					{description}
+				</p>
+
+				<div className="mt-5 grid gap-4">{children}</div>
+
+				<div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+					<Button
+						variant="secondary"
+						onClick={onCancel}
+						disabled={isProcessing}
+					>
+						Cancel
+					</Button>
+					<Button
+						type="submit"
+						variant="primary"
+						disabled={isProcessing || confirmDisabled}
+						isLoading={isProcessing}
+					>
+						{confirmLabel}
+					</Button>
+				</div>
+			</form>
+		</div>
+	);
+}
+
+function TextField({
+	id,
+	name,
+	label,
+	type = "text",
+	value,
+	autoComplete,
+	onChange,
+}: {
+	id: string;
+	name?: string;
+	label: string;
+	type?: string;
+	value: string;
+	autoComplete?: string;
+	onChange: (value: string) => void;
+}) {
+	return (
+		<label
+			htmlFor={id}
+			className="grid gap-2 text-sm font-bold text-slate-950"
+		>
+			{label}
+			<input
+				id={id}
+				name={name}
+				type={type}
+				value={value}
+				autoComplete={autoComplete}
+				onChange={(event) => onChange(event.target.value)}
+				className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-(--app-accent) focus:ring-2 focus:ring-(--app-accent)/15"
+			/>
+		</label>
+	);
+}
+
+function PasswordField({
+	id,
+	name,
+	label,
+	value,
+	autoComplete,
+	onChange,
+}: {
+	id: string;
+	name?: string;
+	label: string;
+	value: string;
+	autoComplete: string;
+	onChange: (value: string) => void;
+}) {
+	return (
+		<TextField
+			id={id}
+			name={name}
+			label={label}
+			type="password"
+			value={value}
+			autoComplete={autoComplete}
+			onChange={onChange}
+		/>
+	);
+}
+
 export function AccountSettingsPage() {
-	const { user } = useAuth();
+	const {
+		user,
+		refreshUser,
+		sendVerificationEmail,
+		changeEmail,
+		changePassword,
+		reauthenticate,
+		deleteAccount,
+		logout,
+	} = useAuth();
 	const {
 		settings: storedSettings,
 		saveSettings: saveStoredSettings,
@@ -350,8 +499,20 @@ export function AccountSettingsPage() {
 		useState<UserSettings>(storedSettings);
 	const [settings, setSettings] = useState<UserSettings>(savedSettings);
 	const [dangerAction, setDangerAction] = useState<DangerAction>(null);
+	const [accountDialog, setAccountDialog] = useState<AccountDialog>(null);
 	const [isExporting, setIsExporting] = useState(false);
 	const [isImporting, setIsImporting] = useState(false);
+	const [isAccountActionProcessing, setIsAccountActionProcessing] =
+		useState(false);
+	const [isSendingVerification, setIsSendingVerification] = useState(false);
+	const [isRefreshingUser, setIsRefreshingUser] = useState(false);
+	const [currentPassword, setCurrentPassword] = useState("");
+	const [newPassword, setNewPassword] = useState("");
+	const [confirmPassword, setConfirmPassword] = useState("");
+	const [emailChangeValue, setEmailChangeValue] = useState("");
+	const [emailChangePassword, setEmailChangePassword] = useState("");
+	const [deletePassword, setDeletePassword] = useState("");
+	const [deleteConfirmationEmail, setDeleteConfirmationEmail] = useState("");
 	const [notificationPermission, setNotificationPermission] = useState(() =>
 		getNotificationPermission(),
 	);
@@ -413,6 +574,170 @@ export function AccountSettingsPage() {
 				: formatOption(provider.providerId.replace(".com", "")),
 		);
 	}, [user?.providerData]);
+
+	const hasPasswordProvider = useMemo(
+		() =>
+			Boolean(
+				user?.providerData.some(
+					(provider) => provider.providerId === "password",
+				),
+			),
+		[user?.providerData],
+	);
+
+	function closeAccountDialog() {
+		if (isAccountActionProcessing) return;
+
+		setAccountDialog(null);
+		setCurrentPassword("");
+		setNewPassword("");
+		setConfirmPassword("");
+		setEmailChangeValue("");
+		setEmailChangePassword("");
+		setDeletePassword("");
+		setDeleteConfirmationEmail("");
+	}
+
+	async function handleSendVerificationEmail() {
+		try {
+			setIsSendingVerification(true);
+			await sendVerificationEmail();
+			showToast("Verification email sent.", "success");
+		} catch (error) {
+			showToast(
+				getAuthErrorMessage(
+					error,
+					"Could not send verification email.",
+				),
+				"error",
+			);
+		} finally {
+			setIsSendingVerification(false);
+		}
+	}
+
+	async function handleRefreshUser() {
+		try {
+			setIsRefreshingUser(true);
+			await refreshUser();
+			showToast("Account status refreshed.", "success");
+		} catch (error) {
+			showToast(
+				getAuthErrorMessage(error, "Could not refresh your account."),
+				"error",
+			);
+		} finally {
+			setIsRefreshingUser(false);
+		}
+	}
+
+	async function handleChangeEmail() {
+		const currentEmail = user?.email?.toLowerCase() ?? "";
+		const nextEmail = emailChangeValue.trim().toLowerCase();
+
+		if (!nextEmail) {
+			showToast("Enter the new email address.", "error");
+			return;
+		}
+
+		if (nextEmail === currentEmail) {
+			showToast("Enter a different email address.", "error");
+			return;
+		}
+
+		if (hasPasswordProvider && !emailChangePassword) {
+			showToast("Enter your current password to change email.", "error");
+			return;
+		}
+
+		try {
+			setIsAccountActionProcessing(true);
+			await changeEmail(nextEmail, emailChangePassword || undefined);
+			showToast(
+				"Check the new address for a confirmation link.",
+				"success",
+			);
+			setAccountDialog(null);
+			setEmailChangeValue("");
+			setEmailChangePassword("");
+		} catch (error) {
+			showToast(
+				getAuthErrorMessage(error, "Could not start the email change."),
+				"error",
+			);
+		} finally {
+			setIsAccountActionProcessing(false);
+		}
+	}
+
+	async function handleChangePassword() {
+		if (!currentPassword || !newPassword || !confirmPassword) {
+			showToast("Fill in each password field.", "error");
+			return;
+		}
+
+		if (newPassword.length < 6) {
+			showToast("Use a password with at least 6 characters.", "error");
+			return;
+		}
+
+		if (newPassword !== confirmPassword) {
+			showToast("New password and confirmation must match.", "error");
+			return;
+		}
+
+		try {
+			setIsAccountActionProcessing(true);
+			await changePassword(currentPassword, newPassword);
+			showToast("Password changed.", "success");
+			setAccountDialog(null);
+			setCurrentPassword("");
+			setNewPassword("");
+			setConfirmPassword("");
+		} catch (error) {
+			showToast(
+				getAuthErrorMessage(error, "Could not change your password."),
+				"error",
+			);
+		} finally {
+			setIsAccountActionProcessing(false);
+		}
+	}
+
+	async function handleDeleteAccount() {
+		if (
+			user?.email &&
+			deleteConfirmationEmail.trim().toLowerCase() !==
+				user.email.toLowerCase()
+		) {
+			showToast("Type your account email to confirm deletion.", "error");
+			return;
+		}
+
+		if (hasPasswordProvider && !deletePassword) {
+			showToast(
+				"Enter your current password to delete your account.",
+				"error",
+			);
+			return;
+		}
+
+		try {
+			setIsAccountActionProcessing(true);
+			await reauthenticate(deletePassword || undefined);
+			await deleteBackendAccount();
+			await deleteAccount();
+			clearLocalSettings();
+			showToast("Account deleted.", "success");
+		} catch (error) {
+			showToast(
+				getAuthErrorMessage(error, "Could not delete your account."),
+				"error",
+			);
+		} finally {
+			setIsAccountActionProcessing(false);
+		}
+	}
 
 	async function exportApplications(format: "csv" | "json") {
 		try {
@@ -571,6 +896,12 @@ export function AccountSettingsPage() {
 					`Deleted ${result.deletedCount} applications.`,
 					"success",
 				);
+			}
+
+			if (dangerAction === "sign_out_all") {
+				await signOutEverywhere();
+				await logout();
+				showToast("Signed out from all devices.", "success");
 			}
 		} catch (error) {
 			showToast(
@@ -889,24 +1220,65 @@ export function AccountSettingsPage() {
 									value={user?.email || "No email available"}
 									className="h-10 w-full max-w-sm rounded-lg border border-slate-200 bg-slate-50 px-4 text-sm font-semibold text-slate-500 outline-none"
 								/>
-								<PrimaryButton disabled>
+								<PrimaryButton
+									disabled={!user?.email}
+									onClick={() => {
+										setEmailChangeValue("");
+										setEmailChangePassword("");
+										setAccountDialog("email");
+									}}
+								>
 									Change email
 								</PrimaryButton>
 							</div>
-							<div className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-blue-600">
-								<CheckCircle2 size={16} strokeWidth={2.5} />
-								{user?.emailVerified
-									? "Email verified"
-									: "Email not verified"}
+							<div className="mt-3 flex flex-wrap items-center gap-3">
+								<div
+									className={[
+										"inline-flex items-center gap-2 text-sm font-semibold",
+										user?.emailVerified
+											? "text-emerald-600"
+											: "text-amber-600",
+									].join(" ")}
+								>
+									<CheckCircle2 size={16} strokeWidth={2.5} />
+									{user?.emailVerified
+										? "Email verified"
+										: "Email not verified"}
+								</div>
+								{!user?.emailVerified && (
+									<PrimaryButton
+										onClick={() =>
+											void handleSendVerificationEmail()
+										}
+										disabled={isSendingVerification}
+										isLoading={isSendingVerification}
+									>
+										Send verification email
+									</PrimaryButton>
+								)}
+								<PrimaryButton
+									onClick={() => void handleRefreshUser()}
+									disabled={isRefreshingUser}
+									isLoading={isRefreshingUser}
+								>
+									Refresh status
+								</PrimaryButton>
 							</div>
 						</AccountRow>
 
 						<AccountRow
 							icon={KeyRound}
 							title="Password"
-							description="If you have forgotten your password, log out and reset it from the sign-in screen."
+							description={
+								hasPasswordProvider
+									? "Change the password for your email sign-in provider."
+									: "Password changes are only available for email and password accounts."
+							}
 						>
-							<PrimaryButton disabled>
+							<PrimaryButton
+								disabled={!hasPasswordProvider}
+								onClick={() => setAccountDialog("password")}
+							>
 								Change password
 							</PrimaryButton>
 						</AccountRow>
@@ -961,9 +1333,11 @@ export function AccountSettingsPage() {
 						<AccountRow
 							icon={ShieldOff}
 							title="Security sessions"
-							description="A full sign-out from every device needs a server-side session revocation flow. This placeholder marks where that control will live."
+							description="Revoke refresh tokens for this account and sign out this browser."
 						>
-							<PrimaryButton disabled>
+							<PrimaryButton
+								onClick={() => setDangerAction("sign_out_all")}
+							>
 								Sign out from all devices
 							</PrimaryButton>
 						</AccountRow>
@@ -971,14 +1345,13 @@ export function AccountSettingsPage() {
 						<AccountRow
 							icon={Trash2}
 							title="Delete account"
-							description="Account deletion is disabled until a Firebase re-authentication and backend account removal flow is added."
+							description="Permanently delete your Firebase account, saved preferences, and all tracked applications."
 							isDanger
 						>
 							<Button
-								disabled
+								onClick={() => setAccountDialog("delete")}
 								variant="dangerSoft"
 								icon={<Trash2 size={16} strokeWidth={2.4} />}
-								className="border-red-100 bg-red-50 text-red-300"
 							>
 								Delete account
 							</Button>
@@ -1316,7 +1689,7 @@ export function AccountSettingsPage() {
 									}
 								>
 									<FileJson size={16} strokeWidth={2.4} />
-									Export full JSON
+									Export Settings JSON
 								</PrimaryButton>
 							</div>
 						</AccountRow>
@@ -1342,7 +1715,9 @@ export function AccountSettingsPage() {
 								onClick={() => importInputRef.current?.click()}
 							>
 								<Upload size={16} strokeWidth={2.4} />
-								{isImporting ? "Importing..." : "Import JSON"}
+								{isImporting
+									? "Importing..."
+									: "Import Settings JSON"}
 							</PrimaryButton>
 						</AccountRow>
 
@@ -1410,6 +1785,156 @@ export function AccountSettingsPage() {
 				)}
 			</div>
 
+			<AccountActionModal
+				isOpen={accountDialog === "email"}
+				title="Change email"
+				description={
+					hasPasswordProvider
+						? "Enter your new email and current password. Firebase will send a confirmation link to the new address."
+						: "Enter your new email. You may be asked to reauthenticate before Firebase sends the confirmation link."
+				}
+				confirmLabel="Send confirmation"
+				isProcessing={isAccountActionProcessing}
+				confirmDisabled={
+					!emailChangeValue.trim() ||
+					(hasPasswordProvider && !emailChangePassword)
+				}
+				onCancel={closeAccountDialog}
+				onConfirm={() => void handleChangeEmail()}
+			>
+				{user?.email && (
+					<input
+						type="hidden"
+						name="username"
+						value={user.email}
+						autoComplete="username"
+						readOnly
+					/>
+				)}
+				<TextField
+					id="new-account-email"
+					name="email"
+					label="New email"
+					type="email"
+					value={emailChangeValue}
+					autoComplete="email"
+					onChange={setEmailChangeValue}
+				/>
+				{hasPasswordProvider && (
+					<PasswordField
+						id="email-change-password"
+						name="current-password"
+						label="Current password"
+						value={emailChangePassword}
+						autoComplete="current-password"
+						onChange={setEmailChangePassword}
+					/>
+				)}
+			</AccountActionModal>
+
+			<AccountActionModal
+				isOpen={accountDialog === "password"}
+				title="Change password"
+				description="Enter your current password, then choose a new one."
+				confirmLabel="Save password"
+				isProcessing={isAccountActionProcessing}
+				confirmDisabled={
+					!currentPassword || !newPassword || !confirmPassword
+				}
+				onCancel={closeAccountDialog}
+				onConfirm={() => void handleChangePassword()}
+			>
+				{user?.email && (
+					<input
+						type="hidden"
+						name="username"
+						value={user.email}
+						autoComplete="username"
+						readOnly
+					/>
+				)}
+				<PasswordField
+					id="current-password"
+					name="current-password"
+					label="Current password"
+					value={currentPassword}
+					autoComplete="current-password"
+					onChange={setCurrentPassword}
+				/>
+				<PasswordField
+					id="new-password"
+					name="new-password"
+					label="New password"
+					value={newPassword}
+					autoComplete="new-password"
+					onChange={setNewPassword}
+				/>
+				<PasswordField
+					id="confirm-new-password"
+					name="confirm-new-password"
+					label="Confirm new password"
+					value={confirmPassword}
+					autoComplete="new-password"
+					onChange={setConfirmPassword}
+				/>
+			</AccountActionModal>
+
+			<AccountActionModal
+				isOpen={accountDialog === "delete"}
+				title="Delete account"
+				description={
+					hasPasswordProvider
+						? "Enter your current password to confirm permanent account deletion."
+						: "You may be asked to reauthenticate with your connected provider before deletion completes."
+				}
+				confirmLabel="Delete account"
+				isProcessing={isAccountActionProcessing}
+				confirmDisabled={
+					(user?.email
+						? deleteConfirmationEmail.trim().toLowerCase() !==
+							user.email.toLowerCase()
+						: false) ||
+					(hasPasswordProvider && !deletePassword)
+				}
+				onCancel={closeAccountDialog}
+				onConfirm={() => void handleDeleteAccount()}
+			>
+				{user?.email && (
+					<input
+						type="hidden"
+						name="username"
+						value={user.email}
+						autoComplete="username"
+						readOnly
+					/>
+				)}
+				{user?.email && (
+					<TextField
+						id="delete-confirmation-email"
+						name="email"
+						label={`Type ${user.email} to confirm`}
+						type="email"
+						value={deleteConfirmationEmail}
+						autoComplete="off"
+						onChange={setDeleteConfirmationEmail}
+					/>
+				)}
+				{hasPasswordProvider && (
+					<PasswordField
+						id="delete-account-password"
+						name="current-password"
+						label="Current password"
+						value={deletePassword}
+						autoComplete="current-password"
+						onChange={setDeletePassword}
+					/>
+				)}
+				<p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm font-semibold leading-6 text-red-600">
+					This permanently removes your account data and cannot be
+					undone.
+				</p>
+			</AccountActionModal>
+
 			<ConfirmationModal
 				isOpen={dangerAction !== null}
 				title={
@@ -1417,21 +1942,27 @@ export function AccountSettingsPage() {
 						? "Reset preferences?"
 						: dangerAction === "clear_applications"
 							? "Clear all applications?"
-							: "Clear local cache?"
+							: dangerAction === "sign_out_all"
+								? "Sign out from all devices?"
+								: "Clear local cache?"
 				}
 				description={
 					dangerAction === "reset_preferences"
 						? "This will return your saved backend settings to their default values."
 						: dangerAction === "clear_applications"
 							? "This will permanently delete every application saved to your account."
-							: "This will remove the settings cache from this browser. Your backend settings will remain saved."
+							: dangerAction === "sign_out_all"
+								? "This revokes active sessions for your account and signs out this browser."
+								: "This will remove the settings cache from this browser. Your backend settings will remain saved."
 				}
 				confirmLabel={
 					dangerAction === "reset_preferences"
 						? "Reset preferences"
 						: dangerAction === "clear_applications"
 							? "Clear applications"
-							: "Clear cache"
+							: dangerAction === "sign_out_all"
+								? "Sign out everywhere"
+								: "Clear cache"
 				}
 				onCancel={() => setDangerAction(null)}
 				onConfirm={confirmDangerAction}

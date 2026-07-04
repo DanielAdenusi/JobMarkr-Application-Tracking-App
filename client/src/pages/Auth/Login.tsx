@@ -103,18 +103,20 @@ export function LoginPage() {
 			<form className="mt-8" onSubmit={handleEmailLogin}>
 				<AuthField
 					id="email"
+					name="username"
 					label="Email"
 					type="email"
 					value={email}
 					onChange={(event) => setEmail(event.target.value)}
 					placeholder="you@example.com"
-					autoComplete="email"
+					autoComplete="username"
 					icon={<Mail size={16} strokeWidth={1.9} />}
 					required
 				/>
 
 				<AuthField
 					id="password"
+					name="password"
 					label="Password"
 					type={showPassword ? "text" : "password"}
 					value={password}

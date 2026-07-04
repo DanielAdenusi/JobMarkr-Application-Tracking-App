@@ -138,18 +138,20 @@ export function SignUpPage() {
 			<form className="mt-8" onSubmit={handleEmailSignUp}>
 				<AuthField
 					id="signup-email"
+					name="username"
 					label="Email"
 					type="email"
 					value={email}
 					onChange={(event) => setEmail(event.target.value)}
 					placeholder="you@example.com"
-					autoComplete="email"
+					autoComplete="username"
 					icon={<Mail size={16} strokeWidth={1.9} />}
 					required
 				/>
 
 				<AuthField
 					id="signup-password"
+					name="new-password"
 					label="Password"
 					type={showPassword.main ? "text" : "password"}
 					value={password}
@@ -203,6 +205,7 @@ export function SignUpPage() {
 
 				<AuthField
 					id="signup-password-confirm"
+					name="confirm-new-password"
 					label="Confirm Password"
 					type={showPassword.confirm ? "text" : "password"}
 					value={confirmPassword}

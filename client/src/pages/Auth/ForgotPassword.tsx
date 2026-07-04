@@ -72,12 +72,13 @@ export function ForgotPasswordPage() {
 		<form className="mt-8" onSubmit={handlePasswordReset}>
 			<AuthField
 				id="reset-email"
+				name="username"
 				label="Email"
 				type="email"
 				value={email}
 				onChange={(event) => setEmail(event.target.value)}
 				placeholder="you@example.com"
-				autoComplete="email"
+				autoComplete="username"
 				icon={<Mail size={16} strokeWidth={1.9} />}
 				required
 			/>

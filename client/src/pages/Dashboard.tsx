@@ -1,11 +1,14 @@
 import { Fragment, useEffect, useState } from "react";
 import {
+	AlertTriangle,
 	ArrowRight,
 	BriefcaseBusiness,
 	CalendarClock,
 	Plus,
+	RefreshCw,
 	TrendingUp,
 	Trophy,
+	WifiOff,
 } from "lucide-react";
 import { Link } from "react-router";
 import {
@@ -17,7 +20,7 @@ import type {
 	DashboardApplicationSummary,
 	DashboardStats,
 } from "../types/dashboard";
-import { Spinner } from "../components/ui/Surface";
+import { EmptyState, Spinner } from "../components/ui/Surface";
 
 function formatDate(value: string | null) {
 	if (!value) return "No date set";
@@ -71,23 +74,22 @@ export function DashboardPage() {
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 
-	useEffect(() => {
-		async function loadDashboard() {
-			try {
-				setError(null);
-				const data = await getDashboardStats();
-				setDashboard(data);
-			} catch (err) {
-				setError(
-					err instanceof Error
-						? err.message
-						: "Failed to load dashboard",
-				);
-			} finally {
-				setIsLoading(false);
-			}
+	async function loadDashboard() {
+		try {
+			setError(null);
+			setIsLoading(true);
+			const data = await getDashboardStats();
+			setDashboard(data);
+		} catch (err) {
+			setError(
+				err instanceof Error ? err.message : "Failed to load dashboard",
+			);
+		} finally {
+			setIsLoading(false);
 		}
+	}
 
+	useEffect(() => {
 		loadDashboard();
 	}, []);
 
@@ -101,11 +103,25 @@ export function DashboardPage() {
 
 	if (error || !dashboard) {
 		return (
-			<section className="rounded-xl border border-red-200 bg-red-50 p-8 text-center">
-				<h2 className="text-lg font-extrabold text-red-900">
-					Dashboard failed to load
+			<section className="rounded-xl border border-amber-200 bg-amber-50 p-8 text-center shadow-sm shadow-amber-100/50">
+				<span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-white text-amber-600 ring-1 ring-amber-200">
+					<AlertTriangle size={22} strokeWidth={2.5} />
+				</span>
+				<h2 className="mt-4 text-lg font-extrabold text-amber-950">
+					We cannot reach your job tracker right now
 				</h2>
-				<p className="mt-2 text-red-700">{error}</p>
+				<p className="mx-auto mt-2 max-w-2xl text-sm font-medium leading-6 text-amber-800">
+					{error ||
+						"The database or API is unavailable, and this browser does not have any saved application data to show yet."}
+				</p>
+				<button
+					type="button"
+					onClick={loadDashboard}
+					className="mt-5 inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-3 text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+				>
+					<RefreshCw size={16} strokeWidth={2.5} />
+					Try again
+				</button>
 			</section>
 		);
 	}
@@ -159,9 +175,42 @@ export function DashboardPage() {
 
 	return (
 		<section className="grid gap-6 text-slate-950">
+			{dashboard.isOffline && (
+				<section className="rounded-xl border border-amber-200 bg-amber-50 p-4 shadow-sm shadow-amber-100/50">
+					<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div className="flex items-start gap-3">
+							<span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-amber-600 ring-1 ring-amber-200">
+								<WifiOff size={18} strokeWidth={2.5} />
+							</span>
+							<div>
+								<p className="font-extrabold text-amber-950">
+									Showing browser-saved data
+								</p>
+								<p className="mt-1 text-sm font-medium text-amber-800">
+									The database is not reachable. You can keep
+									adding applications; new local entries will
+									sync when the backend responds again.
+								</p>
+							</div>
+						</div>
+						<button
+							type="button"
+							onClick={loadDashboard}
+							className="inline-flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+						>
+							<RefreshCw size={16} strokeWidth={2.5} />
+							Retry
+						</button>
+					</div>
+				</section>
+			)}
+
 			<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 md:p-6">
-				<p className="text-sm font-semibold text-slate-500">
-					Offer success rate
+				<p className="text-md font-semibold text-slate-950">
+					Response rate
+				</p>
+				<p className="text-xs font-semibold text-slate-500">
+					(interviews + offers) ÷ total applications
 				</p>
 				<div className="mt-3 flex flex-wrap items-end gap-x-5 gap-y-2">
 					<p className="text-5xl font-black text-slate-950 md:text-6xl">
@@ -185,6 +234,11 @@ export function DashboardPage() {
 						{dashboard.offerCount === 1 ? "" : "s"} achieved
 					</span>
 					<span className="inline-flex items-center gap-2">
+						<span className="h-2 w-2 rounded-full bg-amber-400" />
+						{dashboard.interviewCount} interview
+						{dashboard.interviewCount === 1 ? "" : "s"} scheduled
+					</span>
+					<span className="inline-flex items-center gap-2">
 						<span className="h-2 w-2 rounded-full bg-slate-300" />
 						{dashboard.totalApplications} total applications
 					</span>
@@ -192,8 +246,8 @@ export function DashboardPage() {
 			</section>
 
 			<div className="grid gap-6 xl:grid-cols-[1fr_420px]">
-				<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 md:p-6">
-					<div className="mb-2 pb-4 flex items-center justify-between gap-4  border-b border-slate-200">
+				<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 md:p-6 flex flex-col">
+					<div className="mb-4 pb-4 flex items-center justify-between gap-4  border-b border-slate-200">
 						<h2 className="font-bold text-slate-950">
 							Recent applications
 						</h2>
@@ -207,15 +261,15 @@ export function DashboardPage() {
 					</div>
 
 					{dashboard.recentApplications.length === 0 ? (
-						<div className="py-8 text-center">
-							<p className="font-bold text-slate-700">
+						<EmptyState>
+							<p className="text-lg font-extrabold">
 								No applications added yet.
 							</p>
-							<p className="mt-1 text-sm text-slate-500">
+							<p className="mx-auto max-w-xl leading-7 text-slate-500 text-sm">
 								Add your first application to populate this
 								dashboard.
 							</p>
-						</div>
+						</EmptyState>
 					) : (
 						<div className="flex flex-col gap-3">
 							{dashboard.recentApplications.map((application) => {
@@ -355,7 +409,7 @@ export function DashboardPage() {
 			</div>
 
 			<section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-200/40 md:p-6">
-				<div className="mb-2 flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
+				<div className="mb-4 flex items-end justify-between gap-4 border-b border-slate-200 pb-4">
 					<div>
 						<h2 className="font-bold text-slate-950">
 							Upcoming follow-ups
@@ -370,14 +424,14 @@ export function DashboardPage() {
 				</div>
 
 				{dashboard.upcomingFollowUps.length === 0 ? (
-					<div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center transition hover:border-slate-300">
-						<p className="font-bold text-slate-950">
+					<EmptyState>
+						<p className="text-lg font-extrabold">
 							No upcoming follow-ups.
 						</p>
-						<p className="mt-1 text-sm font-medium text-slate-500">
+						<p className="mx-auto max-w-xl leading-7 text-slate-500 text-sm">
 							Add follow-up dates to stay on top of applications.
 						</p>
-					</div>
+					</EmptyState>
 				) : (
 					<div className="flex flex-col gap-3 border-slate-200">
 						{dashboard.upcomingFollowUps.map((application) => {

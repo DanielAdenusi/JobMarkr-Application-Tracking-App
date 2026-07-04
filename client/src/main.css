@@ -1083,10 +1083,14 @@ html[data-theme="dark"] .status-column-withdrawn {
 	border-top-color: rgb(163 163 163 / 0.45);
 }
 
-html[data-theme="dark"] .icon-button-neutral:hover,
-html[data-theme="dark"] .icon-button-accent:hover {
+html[data-theme="dark"] .icon-button-neutral:hover {
 	background-color: var(--surface-raised);
 	--tw-ring-color: var(--border-strong);
+}
+
+html[data-theme="dark"] .icon-button-accent:hover {
+	background-color: var(--app-accent);
+	--tw-ring-color: var(--app-accent-ring);
 }
 
 html[data-theme="dark"] .icon-button-link {
@@ -1377,4 +1381,127 @@ html[data-theme="dark"] .auth-page .auth-loading {
 
 html[data-theme="dark"] .spinner {
 	border-top-color: var(--app-accent, #0ea89a);
+}
+
+:root {
+	--verification-banner-bg: #fffbeb;
+	--verification-banner-border: #fbbf24;
+	--verification-banner-text: #78350f;
+	--verification-banner-muted: #92400e;
+	--verification-banner-icon: #d97706;
+}
+
+html[data-theme="dark"] {
+	--verification-banner-bg: #111827;
+	--verification-banner-border: rgb(59 130 246 / 0.38);
+	--verification-banner-text: #e0f2fe;
+	--verification-banner-muted: #93c5fd;
+	--verification-banner-icon: #60a5fa;
+}
+
+.landing-page {
+	--landing-accent: var(--app-accent, #0ea89a);
+	--landing-accent-hover: var(--app-accent-hover, #0b8f83);
+	--landing-accent-soft: var(--app-accent-soft, rgb(14 168 154 / 0.14));
+	--landing-accent-ring: var(--app-accent-ring, rgb(14 168 154 / 0.28));
+	--landing-accent-shadow: var(--app-accent-shadow, rgb(14 168 154 / 0.2));
+	--landing-bg: #f8fafc;
+	--landing-section: #eef4f8;
+	--landing-footer: #ffffff;
+	--landing-nav-bg: rgb(248 250 252 / 0.88);
+	--landing-card: #ffffff;
+	--landing-control: #ffffff;
+	--landing-text: #0f172a;
+	--landing-muted: #64748b;
+	--landing-line: rgb(148 163 184 / 0.28);
+	--landing-preview-bg: #f8fafc;
+	--landing-preview-card: #ffffff;
+	--landing-preview-soft: #eef2f7;
+	--landing-preview-text: #0f172a;
+	--landing-preview-line: rgb(148 163 184 / 0.3);
+	--landing-browser-bar: #e2e8f0;
+	--landing-url-bg: #f8fafc;
+	--landing-input-bg: #ffffff;
+	--landing-input-line: rgb(148 163 184 / 0.35);
+}
+
+html[data-theme="dark"] .landing-page {
+	--landing-accent: var(--app-accent, #0ea89a);
+	--landing-accent-hover: var(--app-accent-hover, #0b8f83);
+	--landing-accent-soft: var(--app-accent-soft, rgb(14 168 154 / 0.14));
+	--landing-accent-ring: var(--app-accent-ring, rgb(14 168 154 / 0.28));
+	--landing-accent-shadow: var(--app-accent-shadow, rgb(14 168 154 / 0.2));
+	--landing-bg: #111318;
+	--landing-section: #131720;
+	--landing-footer: #07080b;
+	--landing-nav-bg: rgb(17 19 24 / 0.88);
+	--landing-card: #151821;
+	--landing-control: #151821;
+	--landing-text: #f8fafc;
+	--landing-muted: #9ca3af;
+	--landing-line: rgb(255 255 255 / 0.1);
+	--landing-preview-bg: #111217;
+	--landing-preview-card: #151821;
+	--landing-preview-soft: rgb(255 255 255 / 0.045);
+	--landing-preview-text: #f8fafc;
+	--landing-preview-line: rgb(255 255 255 / 0.1);
+	--landing-browser-bar: #25262c;
+	--landing-url-bg: #3a3b44;
+	--landing-input-bg: #242429;
+	--landing-input-line: rgb(255 255 255 / 0.12);
+}
+
+.marketing-menu-backdrop {
+	background:
+		radial-gradient(circle at 12% 12%, var(--landing-accent-ring), transparent 10rem),
+		rgb(2 6 23 / 0.58);
+	backdrop-filter: blur(18px) saturate(0.7);
+	-webkit-backdrop-filter: blur(18px) saturate(0.7);
+}
+
+html[data-theme="light"] .marketing-menu-backdrop {
+	background:
+		radial-gradient(circle at 12% 12%, var(--landing-accent-ring), transparent 10rem),
+		rgb(248 250 252 / 0.62);
+	backdrop-filter: blur(18px) saturate(0.85);
+	-webkit-backdrop-filter: blur(18px) saturate(0.85);
+}
+
+.marketing-menu-open .landing-page > main,
+.marketing-menu-open .landing-page > footer {
+	filter: blur(10px);
+	transform: scale(1.01);
+	transform-origin: top center;
+	transition:
+		filter 180ms ease,
+		transform 180ms ease;
+}
+
+.marketing-menu-open .landing-nav > div:first-child {
+	filter: blur(6px);
+	transition: filter 180ms ease;
+}
+
+.marketing-menu-open .landing-nav > div:last-child {
+	filter: none;
+}
+
+.landing-page:has(.marketing-menu-backdrop) > main,
+.landing-page:has(.marketing-menu-backdrop) > footer {
+	filter: blur(12px);
+	transform: scale(1.01);
+	transform-origin: top center;
+	transition:
+		filter 180ms ease,
+		transform 180ms ease;
+}
+
+.landing-nav:has(.marketing-menu-backdrop) > div:first-child {
+	filter: blur(8px);
+	transform: scale(1.01);
+	transform-origin: top center;
+}
+
+.landing-nav:has(.marketing-menu-backdrop) > div:last-child {
+	filter: none;
 }
